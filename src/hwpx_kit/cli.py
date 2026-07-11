@@ -25,11 +25,21 @@ from hwpx_kit.commands.validate import run_validate
 from hwpx_kit.output import envelope, print_result
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    from importlib.metadata import version
+def _dist_version() -> str:
+    # PyPI 배포명은 hwpx-kit-cli (hwpx-kit은 유사명 차단) — 구명 설치본 폴백 유지
+    from importlib.metadata import PackageNotFoundError, version
 
+    for name in ("hwpx-kit-cli", "hwpx-kit"):
+        try:
+            return version(name)
+        except PackageNotFoundError:
+            continue
+    return "unknown"
+
+
+def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hwpx-kit", description="HWPX 양식 자동화 CLI")
-    p.add_argument("--version", action="version", version=f"hwpx-kit {version('hwpx-kit')}")
+    p.add_argument("--version", action="version", version=f"hwpx-kit {_dist_version()}")
     sub = p.add_subparsers(dest="command", required=True)
 
     pa = sub.add_parser("analyze", help="양식에서 채울 수 있는 필드 탐지")
