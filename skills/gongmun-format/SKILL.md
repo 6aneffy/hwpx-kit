@@ -1,6 +1,6 @@
 ---
 name: gongmun-format
-description: 행안부 공문서 작성 규약 — 글머리 위계(□○-※*), 날짜·금액 표기, 홑낫표, 어절정리, 복붙 깨짐 복구. 공문·보도자료·계획안 초안 작성이나 "공문 형식으로", "보고서 양식 맞춰줘" 요청 시 사용.
+description: 행안부 공문서 작성 규약 — 글머리 위계(□○-※*), 날짜·금액 표기, 홑낫표, 어절정리, 복붙 깨짐 복구. 공문·보도자료·계획안 초안 작성이나 "공문 형식으로", "공문서 규정대로", "보고서 양식 맞춰줘" 요청 시 사용. Triggers: Korean government document style, gongmun formatting.
 ---
 
 # gongmun-format: 행안부 공문 작성 규약

@@ -1,6 +1,6 @@
 ---
 name: hwpx-kit
-description: HWPX 양식 자동화 — 한글(HWPX/HWP) 양식 분석, 내용 채우기, 본문 추출, 구조 검증, .hwp→.hwpx 변환. 사용자가 hwpx/hwp 파일을 주며 "이 양식에 채워줘", "이 문서 읽어줘/요약해줘", "hwp 변환해줘" 할 때 사용.
+description: HWPX 양식 자동화 — 한글(HWPX/HWP) 양식 분석, 내용 채우기, 본문 추출, 구조 검증, .hwp→.hwpx 변환. 사용자가 hwpx/hwp 파일을 주며 "이 양식에 채워줘", "여기에 써줘", "이 문서 읽어줘/요약해줘", "hwp 변환해줘" 할 때 사용. Triggers: fill this Korean form, read this hwp/hwpx file, Hangul document automation.
 ---
 
 # hwpx-kit: HWPX 양식 자동화

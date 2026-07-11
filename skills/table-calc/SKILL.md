@@ -1,6 +1,6 @@
 ---
 name: table-calc
-description: 보고서 표 수치 작업 — 증감(△·▲▽·↑↓·%·%p), 비율, 순번, 세자리 콤마, 합계·역합계 계산과 공무원 관습 표기. hwpx 표에 "증감 채워줘", "비율 계산해서 넣어줘", "합계 맞춰줘" 요청 시 사용.
+description: 보고서 표 수치 작업 — 증감(△·▲▽·↑↓·%·%p), 비율, 순번, 세자리 콤마, 합계·역합계 계산과 공무원 관습 표기. hwpx 표에 "증감 채워줘", "비율 계산해서 넣어줘", "합계 맞춰줘", "표 계산해줘" 요청 시 사용. Triggers: calculate table totals in Korean report style.
 ---
 
 # table-calc: 표 수치 계산·표기

@@ -1,6 +1,6 @@
 ---
 name: doc-create
-description: 양식 파일 없이 한글(hwpx) 문서를 새로 만들 때 — "기획서 작성해줘", "보고서 만들어줘", "공문 하나 써줘" 등 문서 생성 요청이 왔는데 hwpx/hwp 파일이 안 보이면 사용. 양식 유무를 확인하고 맞는 경로로 라우팅한다.
+description: 양식 파일 없이 한글(hwpx) 문서를 새로 만들 때 — "기획서 작성해줘", "보고서 만들어줘", "공문 하나 써줘", "한글 파일로 만들어줘" 등 문서 생성 요청이 왔는데 hwpx/hwp 파일이 안 보이면 사용. 양식 유무를 확인하고 맞는 경로로 라우팅한다. Triggers: create a new Korean hwpx document, write a proposal in Hangul format.
 ---
 
 # doc-create: 백지에서 한글 문서 만들기

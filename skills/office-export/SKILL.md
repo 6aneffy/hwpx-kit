@@ -1,6 +1,6 @@
 ---
 name: office-export
-description: 한글(hwpx) 문서를 오피스 형식으로 — 워드(docx) 변환, 파워포인트(pptx) 발표자료 재구성, 엑셀(xlsx) 표 추출. "이거 PPT로 만들어줘", "워드로 줘", "엑셀로 정리해줘" 요청 시 사용.
+description: 한글(hwpx) 문서를 오피스 형식으로 — 워드(docx) 변환, 파워포인트(pptx) 발표자료 재구성, 엑셀(xlsx) 표 추출. "이거 PPT로 만들어줘", "워드로 줘", "워드로도 뽑아줘", "엑셀로 정리해줘" 요청 시 사용. Triggers: convert hwpx to Word/docx, make a PowerPoint from this Hangul document.
 ---
 
 # office-export: hwpx → 워드/파워포인트/엑셀
