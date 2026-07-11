@@ -1,9 +1,17 @@
 [project]
-name = "hwpx-kit"
-version = "0.1.1"
-description = "HWPX form automation CLI for AI agents: analyze, fill, read, validate"
+name = "hwpx-kit-cli"
+version = "0.1.2"
+description = "한글(HWPX) 문서 자동화 CLI — Korean HWPX document automation for AI agents: analyze, fill, read, validate, table ops"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+authors = [{ name = "6aneffy", email = "tkdgus990809@gmail.com" }]
+keywords = ["hwpx", "hwp", "hangul", "korean", "document-automation", "claude-code"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Office Suites",
+]
 dependencies = [
     "openpyxl>=3.1.5",
     "pypdf>=6.14.2",
@@ -13,6 +21,11 @@ dependencies = [
 
 [project.optional-dependencies]
 convert = ["pyhwpx; sys_platform == 'win32'"]
+
+[project.urls]
+Homepage = "https://github.com/6aneffy/hwpx-kit"
+Repository = "https://github.com/6aneffy/hwpx-kit"
+Issues = "https://github.com/6aneffy/hwpx-kit/issues"
 
 [project.scripts]
 hwpx-kit = "hwpx_kit.cli:main"

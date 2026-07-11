@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $source = $env:HWPX_KIT_SOURCE
 if (-not $source) {
-    $source = "git+https://github.com/6aneffy/hwpx-kit.git"
+    $source = "hwpx-kit-cli"
 }
 
 # 1. Python 확인

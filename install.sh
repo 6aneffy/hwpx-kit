@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOURCE="${HWPX_KIT_SOURCE:-git+https://github.com/6aneffy/hwpx-kit.git}"
+SOURCE="${HWPX_KIT_SOURCE:-hwpx-kit-cli}"
 
 if ! command -v python3 >/dev/null; then
     echo "Python 3.10+ 가 필요합니다."; exit 1

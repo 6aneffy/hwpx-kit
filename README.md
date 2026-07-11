@@ -7,6 +7,7 @@
 *"이 양식에 채워줘" 한마디로, 서식 무손상 한글 문서가 나옵니다.*
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/hwpx-kit-cli.svg)](https://pypi.org/project/hwpx-kit-cli/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757.svg)](https://claude.com/claude-code)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](tests/)
@@ -58,7 +59,7 @@ Claude Code에서:
 <summary>수동 설치</summary>
 
 ```bash
-pip install git+https://github.com/6aneffy/hwpx-kit.git
+pip install hwpx-kit-cli
 ```
 
 ```powershell
