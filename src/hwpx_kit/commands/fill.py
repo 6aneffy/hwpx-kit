@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import re
+
+from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+# 라벨 끝의 출현 인덱스: "부서#2" → ("부서", 2). 중복 라벨 구분용
+_NTH_RE = re.compile(r"^(.+?)\s*#(\d+)$")
+
+_DIRECTIONS = {"left", "right", "up", "down"}
+
+
+def _parse_table_spec(spec: str) -> tuple[str, list[str], int | None]:
+    """"라벨#N > 방향..." 분해. 방향 토큰은 끝에서부터 유효한 것만 소비 —
+    라벨 자체에 '>'가 들어가도('담당 부서 <총괄>') 잘리지 않는다."""
+    parts = spec.split(">")
+    directions: list[str] = []
+    while len(parts) > 1 and parts[-1].strip().casefold() in _DIRECTIONS:
+        directions.insert(0, parts.pop().strip().casefold())
+    label = ">".join(parts).strip()
+    if not directions:
+        directions = ["right"]
+    nth = None
+    nth_match = _NTH_RE.match(label)
+    if nth_match:
+        label, nth = nth_match.group(1), int(nth_match.group(2))
+    return label, directions, nth
+
+
+def _apply_one(ad: HwpxEngineAdapter, fill_key: str, value: str) -> str | None:
+    """성공 시 None, 실패 시 사유 문자열 반환."""
+    if fill_key.startswith("clickhere:"):
+        name = fill_key[len("clickhere:"):]
+        try:
+            ad.fill_form_field(name, value)
+            return None
+        except Exception as exc:  # 엔진이 없는 필드에 던지는 예외를 사유로 변환
+            return f"누름틀 채우기 실패: {exc}"
+
+    if fill_key.startswith("marker:"):
+        key = fill_key[len("marker:"):]
+        count = ad.replace_marker(key, value)
+        return None if count > 0 else "문서에서 마커를 찾지 못함"
+
+    if fill_key.startswith("text:"):
+        search = fill_key[len("text:"):]
+        count = ad.replace_text(search, value)
+        if count == 0:
+            # 런이 쪼개진 긴 문장 — 문단 전체 일치로 폴백
+            count = ad.replace_paragraph_text(search, value)
+        return None if count > 0 else "문서에서 해당 문구를 찾지 못함"
+
+    if fill_key.startswith("delete:"):
+        search = fill_key[len("delete:"):]
+        count = ad.delete_paragraph_text(search)
+        return None if count > 0 else "문서에서 해당 문단을 찾지 못함"
+
+    if fill_key.startswith("bold:"):
+        count = ad.apply_run_format(fill_key[len("bold:"):], bold=True)
+        return None if count > 0 else "문서에서 해당 문구를 찾지 못함"
+
+    if fill_key.startswith("underline:"):
+        count = ad.apply_run_format(fill_key[len("underline:"):], underline=True)
+        return None if count > 0 else "문서에서 해당 문구를 찾지 못함"
+
+    if fill_key.startswith("table:"):
+        label, directions, nth = _parse_table_spec(fill_key[len("table:"):])
+        result = ad.fill_at_label(label, directions, value, nth=nth)
+        if result.get("applied_count", 0) > 0:
+            return None
+        failed = result.get("failed") or [{}]
+        reason = failed[0].get("reason", "라벨 없음")
+        if "ambiguous" in str(reason):
+            reason = f"{reason} — 같은 라벨이 여러 곳. analyze의 table:라벨#N 키로 지정"
+        return f"표 채우기 실패: {reason}"
+
+    return "알 수 없는 fill_key 형식 (clickhere:/marker:/table:/text:/delete:/bold:/underline: 중 하나여야 함)"
+
+
+def run_fill(path: str, data: dict[str, str], out_path: str) -> dict:
+    ad = HwpxEngineAdapter.open(path)
+    applied: list[str] = []
+    unmatched: list[dict] = []
+    for fill_key, value in data.items():
+        reason = _apply_one(ad, fill_key, str(value))
+        if reason is None:
+            applied.append(fill_key)
+        else:
+            unmatched.append({"key": fill_key, "reason": reason})
+    saved = ad.save_copy(out_path)
+    return {"out": saved, "applied": applied, "unmatched": unmatched}

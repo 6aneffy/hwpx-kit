@@ -1,0 +1,43 @@
+"""엔진 독립 인터페이스.
+
+commands/ 는 이 모듈의 타입과 Protocol만 알아야 한다.
+python-hwpx 교체 시 hwpx_engine.py만 다시 쓴다.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Protocol
+
+# 엔진의 PLACEHOLDER_RE는 ASCII 전용 — 한글 키를 위해 자체 정의
+MARKER_RE = re.compile(r"\{\{\s*([^{}\s][^{}]*?)\s*\}\}")
+
+
+@dataclass
+class FormField:
+    index: int
+    name: str
+    current: str
+
+
+@dataclass
+class Marker:
+    key: str
+    paragraph_index: int
+    context: str
+
+
+class EngineAdapter(Protocol):
+    def form_fields(self) -> list[FormField]: ...
+    def markers(self) -> list[Marker]: ...
+    def table_map(self) -> dict: ...
+    def fill_form_field(self, name: str, value: str) -> dict: ...
+    def replace_marker(self, key: str, value: str) -> int: ...
+    def replace_text(self, search: str, value: str) -> int: ...
+    def replace_paragraph_text(self, search: str, value: str) -> int: ...
+    def delete_paragraph_text(self, search: str) -> int: ...
+    def fill_by_label(self, label_path: str, value: str) -> dict: ...
+    def export_markdown(self) -> str: ...
+    def export_text(self) -> str: ...
+    def validate(self) -> dict: ...
+    def save_copy(self, out_path: str) -> str: ...

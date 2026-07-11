@@ -1,0 +1,11 @@
+{
+  "name": "hwpx-kit-market",
+  "owner": { "name": "6aneffy", "email": "tkdgus990809@gmail.com" },
+  "plugins": [
+    {
+      "name": "hwpx-kit",
+      "source": "./",
+      "description": "한글(HWPX/HWP) 문서 자동화 스킬 모음"
+    }
+  ]
+}

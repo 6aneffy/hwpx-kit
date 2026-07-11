@@ -1,0 +1,31 @@
+[project]
+name = "hwpx-kit"
+version = "0.1.0"
+description = "HWPX form automation CLI for AI agents: analyze, fill, read, validate"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "pypdf>=6.14.2",
+    "python-docx>=1.2.0",
+    "python-hwpx>=2.24,<3",
+]
+
+[project.optional-dependencies]
+convert = ["pyhwpx; sys_platform == 'win32'"]
+
+[project.scripts]
+hwpx-kit = "hwpx_kit.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hwpx_kit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
