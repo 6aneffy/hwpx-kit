@@ -1,8 +1,11 @@
 ---
-description: hwpx-kit 도움말 — 스킬 6종과 사용 예시 안내
+description: hwpx-kit 도움말 — 스킬 6종과 사용 예시 안내 (사용자가 /hwpx를 직접 입력했을 때 전용)
+disable-model-invocation: true
 ---
 
 아래 카탈로그를 그대로 사용자에게 출력하라. 다른 도구를 호출하지 말 것.
+(이 카탈로그는 사용자가 /hwpx를 직접 쳤을 때만 보여주는 것 — 문서 작업
+요청이 들어온 상황이라면 카탈로그 출력 없이 해당 스킬로 바로 진행하라.)
 
 ```
 📄 hwpx-kit — 한글(HWPX) 문서 자동화
