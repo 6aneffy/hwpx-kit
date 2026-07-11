@@ -81,6 +81,22 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     ph.add_argument("--json", action="store_true")
 
+    pra = sub.add_parser("row-add", help="표 행 추가 — 기준 행 서식·높이 승계, 내용은 비움 (세로 병합 걸리면 거부)")
+    pra.add_argument("file")
+    pra.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    pra.add_argument("--like", type=int, required=True, help="복제할 기준 행 (0-기준, 병합 없는 행)")
+    pra.add_argument("--count", type=int, default=1, help="추가할 행 수 (기본 1)")
+    pra.add_argument("--at", type=int, help="새 행 시작 위치 (0-기준, 생략 시 기준 행 바로 다음)")
+    pra.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pra.add_argument("--json", action="store_true")
+
+    prd = sub.add_parser("row-del", help="표 행 삭제 — 세로 병합은 구간 전체를 함께 지정해야 허용")
+    prd.add_argument("file")
+    prd.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    prd.add_argument("--rows", required=True, help="삭제할 행: '3-7' 범위 / '3,5' 나열 / 혼합")
+    prd.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    prd.add_argument("--json", action="store_true")
+
     pcl = sub.add_parser("table-clear", help="표의 지정 행 셀 내용 비우기 (구조는 유지 — 잔존 내용 정리용)")
     pcl.add_argument("file")
     pcl.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -186,6 +202,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "row-height":
             data = run_row_height(
                 args.file, table=args.table, like=args.like,
+                rows=parse_rows_spec(args.rows), out_path=args.out,
+            )
+        elif args.command == "row-add":
+            from hwpx_kit.commands.table_rows import run_row_add
+
+            data = run_row_add(
+                args.file, table=args.table, like=args.like,
+                count=args.count, at=args.at, out_path=args.out,
+            )
+        elif args.command == "row-del":
+            from hwpx_kit.commands.table_rows import run_row_del
+
+            data = run_row_del(
+                args.file, table=args.table,
                 rows=parse_rows_spec(args.rows), out_path=args.out,
             )
         elif args.command == "table-clear":

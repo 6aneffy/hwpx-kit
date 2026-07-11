@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 기능 제안·질문
+    url: https://github.com/6aneffy/hwpx-kit/discussions
+    about: 버그가 아닌 제안·질문은 Discussions로 (없으면 그냥 이슈로 열어도 됩니다)

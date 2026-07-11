@@ -8,7 +8,7 @@
   ├── hwpx-kit-plugin/           ← 플러그인 겸 자기-마켓플레이스 (통째 복사)
   │   ├── .claude-plugin/{plugin.json, marketplace.json}
   │   └── skills/*/SKILL.md
-  ├── hwpx_kit-<버전>-*.whl      ← CLI 런타임
+  ├── hwpx_kit_cli-<버전>-*.whl      ← CLI 런타임
   ├── install.ps1 / install.sh   ← wheel 설치 + 플러그인 등록
   └── README.md
 """
@@ -39,7 +39,7 @@ if ($ver.Trim() -ne "True") {
     exit 1
 }
 
-$wheel = Get-ChildItem "$here\\hwpx_kit-*.whl" | Select-Object -First 1
+$wheel = Get-ChildItem "$here\\hwpx_kit_cli-*.whl" | Select-Object -First 1
 if (-not $wheel) { Write-Host "번들에 wheel이 없습니다."; exit 1 }
 
 Write-Host "hwpx-kit CLI 설치 중..."
@@ -99,7 +99,7 @@ fi
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' \\
     || { echo "Python 3.10 이상 필요. 현재: $(python3 --version)"; exit 1; }
 
-WHEEL="$(ls "$HERE"/hwpx_kit-*.whl | head -n 1)"
+WHEEL="$(ls "$HERE"/hwpx_kit_cli-*.whl | head -n 1)"
 echo "hwpx-kit CLI 설치 중..."
 python3 -m pip install --user --upgrade "$WHEEL"
 
@@ -175,7 +175,7 @@ def build(out_dir: Path) -> Path:
             ["uv", "build", "--wheel", "--out-dir", td], cwd=str(REPO), check=True,
             capture_output=True,
         )
-        wheel = next(Path(td).glob("hwpx_kit-*.whl"))
+        wheel = next(Path(td).glob("hwpx_kit_cli-*.whl"))
 
         bundle = out_dir / f"hwpx-kit-plugin-{version}.zip"
         with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as zf:

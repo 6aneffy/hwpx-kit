@@ -175,3 +175,24 @@ def test_run_analyze_on_label_table_doc(label_table_doc):
     assert "table:성명" in keys
     assert "table:부서" in keys
     assert data["tables"]["count"] == 1
+
+
+def test_run_analyze_detects_markers_in_table_cells(tmp_path):
+    """표 셀 안 {{마커}}도 analyze가 잡는다 (fill은 원래 됐음 — 탐지 공백 해소)."""
+    from hwpx.document import HwpxDocument
+
+    from hwpx_kit.output import quiet_engine
+
+    with quiet_engine():
+        doc = HwpxDocument.new()
+        doc.add_paragraph("본문 {{제목}}")
+        t = doc.add_table(2, 2)
+        t.set_cell_text(0, 1, "{{기관명}}")
+        t.set_cell_text(1, 1, "고정 텍스트")
+        path = str(tmp_path / "cellmarker.hwpx")
+        doc.save_to_path(path)
+
+    data = run_analyze(path)
+    keys = {f["fill_key"] for f in data["fields"]}
+    assert "marker:제목" in keys
+    assert "marker:기관명" in keys

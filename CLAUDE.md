@@ -26,7 +26,7 @@ skills/*/SKILL.md → Claude Code 플러그인 스킬들 (.claude-plugin/plugin.
  └─ office-export    → hwpx→docx(변환)·pptx/xlsx(재구성, officecli 선택 의존)
 
 CLI (cli.py) — JSON 봉투, 종료코드 0/1/2
- └─ commands/ (analyze·fill·read·validate·convert·export·render·generate·fmt·row-height·table-clear·table-set·table-copy·table-map·table-new·page-break·outline)
+ └─ commands/ (analyze·fill·read·validate·convert·export·render·generate·fmt·row-add·row-del·row-height·table-clear·table-set·table-copy·table-map·table-new·page-break·outline)
      ├─ format.py ← 순수함수 (금액한글화·요일·만나이) — 엔진 임포트 금지, fmt는 파일 인수 없음(FILE_NOT_FOUND 가드 우회)
      └─ adapter/ ← 명령 계층은 어댑터 인터페이스만 사용 (엔진 직접 import 금지)
          ├─ hwpx_engine.py   → python-hwpx (hwpx 분석·채우기·검증·표 조작, 순수 Python)
@@ -64,10 +64,10 @@ CLI (cli.py) — JSON 봉투, 종료코드 0/1/2
 - 표 셀 문단의 `p.remove()`는 예외 없이 무효될 수 있음 → 삭제는 blank-first
 - kordoc render는 한컴 저장본(조판 캐시)만 정밀 — 우리가 만든 파일은 `--reflow` 합성 렌더로 자동 폴백되는데 **겹침 등 부정확. 대략 확인용일 뿐, 정확한 검증은 한글로 여는 것**
 - 한글 COM(convert/export) 함정 3가지: ① SaveAs의 워드 형식 문자열은 `"OOXML"` — "DOCX"/"MSWORD"는 False 반환하며 조용히 실패 ② visible=False에서 경고 팝업 뜨면 무한대기 — `set_message_box_mode(AUTO_ANSWER_MODE)` 필수 (convert.py 상수) ③ **좀비 Hwp 프로세스가 남아 있으면 다음 COM 세션이 그냥 멈춤** — hang 시 `Stop-Process -Name Hwp -Force` 먼저
-- python-hwpx에는 표 행 추가/삭제 API 없음 (`add_table`/`merge_table_cells`뿐) — 행 개수 변경은 사용자가 한글에서, 높이 정돈은 `row-height`, 내용 비우기는 `table-clear`, 좌표 기입은 `table-set`
+- 표 행 추가/삭제는 어댑터 자체 구현(`add_table_rows`/`delete_table_rows` — 엔진엔 API 없음): tr deepcopy + cellAddr 시프트 + rowCnt 갱신. 세로 병합에 걸리면 거부(가드). 🔴 **원시 XML 수정 후엔 반드시 `_mark_sections_dirty()`** — dirty가 안 서면 저장이 원본 바이트를 재사용해 수정이 통째 증발 (2026-07-11 실증, `test_row_add_new_row_writable_and_persists`가 회귀 감지)
+- analyze 마커 탐지는 표 셀 안 {{마커}}도 잡음 (2026-07-11 `_iter_all_paragraphs`로 확장 — 이전 "본문만" 제약 해소)
 - **셀 비우기는 서식을 잃지 않는다** (실험 확인): `set_cell_text('')`가 텍스트만 지우고 빈 런의 글자모양(charPr) 참조는 유지 → 재기입 시 원래 서식 물려받음. table-clear가 안전한 근거
 - 병합 셀은 엔진 표 맵에서 같은 텍스트가 격자 전체에 복제되어 보임 — 어댑터 table_map()이 셀별 `is_anchor`를 덧붙이고, 라벨 후보·#N 열거는 anchor만 센다 (복제를 세면 #N 오염 + 같은 논리 셀 이중 기입으로 값 유실)
-- analyze의 마커 탐지는 본문 문단만 훑음 — 표 셀 안 {{마커}}는 못 잡음 (fill은 됨) ← 개선 후보
 
 ## 개발 환경
 

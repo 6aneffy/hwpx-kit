@@ -32,13 +32,18 @@ class HwpxEngineAdapter:
         ]
 
     def markers(self) -> list[Marker]:
+        """{{마커}} 탐지 — 본문 + 표 셀(중첩 포함) 문단 전부.
+
+        fill(replace_text_in_runs)은 원래 셀 안도 갈아치우는데 탐지만
+        본문 한정이던 공백을 해소 (2026-07-11). paragraph_index는 전체
+        순회 순번 — 위치 참고용일 뿐 본문 인덱스와 다를 수 있다.
+        """
         found: list[Marker] = []
         with quiet_engine():
-            paragraphs = list(self._doc.paragraphs)
-        for idx, para in enumerate(paragraphs):
-            text = para.text or ""
-            for key in MARKER_RE.findall(text):
-                found.append(Marker(key=key, paragraph_index=idx, context=text))
+            for idx, para in enumerate(self._iter_all_paragraphs()):
+                text = para.text or ""
+                for key in MARKER_RE.findall(text):
+                    found.append(Marker(key=key, paragraph_index=idx, context=text))
         return found
 
     def table_map(self) -> dict:
@@ -535,6 +540,136 @@ class HwpxEngineAdapter:
                         cell.element.set("borderFillIDRef", ref)
                     if height:
                         cell.set_size(height=height)
+
+    def _mark_sections_dirty(self) -> None:
+        """원시 XML 수정 후 필수 — dirty가 안 서면 저장이 원본 바이트를
+        재사용해 수정이 통째로 증발한다 (실증 2026-07-11). 엔진 교체 시
+        이 지점 재확인."""
+        for section in self._doc._root._sections:
+            section.mark_dirty()
+
+    @staticmethod
+    def _table_trs(table_el) -> list:
+        return [c for c in table_el if c.tag.endswith("}tr")]
+
+    @staticmethod
+    def _row_spans(table_el) -> list[tuple[int, int]]:
+        """anchor 셀들의 세로 병합 구간 [(시작행, 끝행+1), ...] (rowSpan>1만)."""
+        spans = []
+        for tc in table_el.iter():
+            if not tc.tag.endswith("}tc"):
+                continue
+            addr = span = None
+            for child in tc:
+                if child.tag.endswith("}cellAddr"):
+                    addr = int(child.get("rowAddr", "0"))
+                elif child.tag.endswith("}cellSpan"):
+                    span = int(child.get("rowSpan", "1"))
+            if addr is not None and span and span > 1:
+                spans.append((addr, addr + span))
+        return spans
+
+    @staticmethod
+    def _shift_row_addrs(tr, delta: int) -> None:
+        for node in tr.iter():
+            if node.tag.endswith("}cellAddr"):
+                node.set("rowAddr", str(int(node.get("rowAddr", "0")) + delta))
+
+    def add_table_rows(self, table_index: int, like: int, count: int = 1,
+                       at: int | None = None) -> int:
+        """like 행을 복제해 count개 삽입 (서식·높이·가로병합 승계, 내용은 비움).
+
+        at(0-기준)은 새 행들이 시작할 행 번호 — 생략 시 like 바로 다음.
+        세로 병합 가드: like 행에 rowSpan>1 셀이 있거나, 삽입 지점이 병합
+        구간을 가르면 거부 (조용한 표 손상 방지 — 사용자가 한글에서 처리).
+        """
+        import copy as _copy
+
+        if count < 1:
+            raise ValueError(f"count는 1 이상: {count}")
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table_el = tables[table_index].table.element
+            trs = self._table_trs(table_el)
+            n_rows = len(trs)
+            if not 0 <= like < n_rows:
+                raise ValueError(f"기준 행 범위 밖: {like} (행 {n_rows}개)")
+            insert_at = like + 1 if at is None else at
+            if not 0 <= insert_at <= n_rows:
+                raise ValueError(f"삽입 위치 범위 밖: {insert_at} (행 {n_rows}개)")
+
+            spans = self._row_spans(table_el)
+            for start, end in spans:
+                if start <= like < end:
+                    raise ValueError(
+                        f"기준 행 {like}에 세로 병합이 걸려 있음 — 병합 없는 행을 기준으로 지정하세요.")
+                if start < insert_at < end:
+                    raise ValueError(
+                        f"삽입 위치 {insert_at}가 세로 병합 구간({start}~{end - 1})을 가름 — 다른 위치를 지정하세요.")
+
+            # 뒤 행들 주소 시프트 후 복제 행 삽입
+            for tr in trs[insert_at:]:
+                self._shift_row_addrs(tr, count)
+            like_tr = trs[like]
+            anchor = trs[insert_at - 1] if insert_at > 0 else None
+            for i in range(count):
+                new_tr = _copy.deepcopy(like_tr)
+                for node in new_tr.iter():
+                    if node.tag.endswith("}t"):
+                        node.text = ""
+                    elif node.tag.endswith("}cellAddr"):
+                        node.set("rowAddr", str(insert_at + i))
+                if anchor is None:
+                    table_el.insert(list(table_el).index(trs[0]), new_tr)
+                else:
+                    anchor.addnext(new_tr)
+                anchor = new_tr
+            table_el.set("rowCnt", str(n_rows + count))
+            self._mark_sections_dirty()
+        return count
+
+    def delete_table_rows(self, table_index: int, rows: list[int]) -> int:
+        """지정 행들을 삭제. 세로 병합은 구간 전체를 함께 지정해야 허용.
+
+        내용만 비우려면 table-clear — 이 명령은 행 구조 자체를 줄인다.
+        """
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table_el = tables[table_index].table.element
+            trs = self._table_trs(table_el)
+            n_rows = len(trs)
+            targets = sorted(set(rows))
+            bad = [r for r in targets if not 0 <= r < n_rows]
+            if bad:
+                raise ValueError(f"행 범위 밖: {bad} (행 {n_rows}개)")
+            if len(targets) >= n_rows:
+                raise ValueError("행 전부를 삭제할 수 없습니다 — 표 삭제는 한글에서.")
+
+            target_set = set(targets)
+            for start, end in self._row_spans(table_el):
+                span_rows = set(range(start, end))
+                if span_rows & target_set and not span_rows <= target_set:
+                    raise ValueError(
+                        f"세로 병합 구간({start}~{end - 1})의 일부만 삭제할 수 없음 — 구간 전체를 함께 지정하세요.")
+
+            for r in targets:
+                table_el.remove(trs[r])
+            # 남은 행 주소 재부여 (문서 순서 = 행 순서)
+            for new_idx, tr in enumerate(self._table_trs(table_el)):
+                for node in tr.iter():
+                    if node.tag.endswith("}cellAddr"):
+                        node.set("rowAddr", str(new_idx))
+            table_el.set("rowCnt", str(n_rows - len(targets)))
+            self._mark_sections_dirty()
+        return len(targets)
 
     def save_copy(self, out_path: str) -> str:
         out_abs = os.path.abspath(out_path)
