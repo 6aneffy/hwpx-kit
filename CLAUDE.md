@@ -56,7 +56,7 @@ CLI (cli.py) — JSON 봉투, 종료코드 0/1/2
 1. **fill은 원본 절대 수정 금지** — `--out` 사본만. 원본 경로로 저장 시 ValueError
 2. **`--json` 모드 stdout = JSON 한 줄만** — python-hwpx가 stdout에 print하므로 모든 엔진 호출은 `quiet_engine()`으로 감쌀 것. CLI는 stdout/stderr를 UTF-8로 강제(Windows cp949 문제)
 3. **lxml 요소 프록시에 `id()` 쓰지 말 것** — GC 후 id 재사용으로 비결정 버그 남 (`test_press_form_title_text_replacement_roundtrip`이 재발 감지)
-4. `skills/*/SKILL.md`(또는 templates/) 수정하면 **커밋·push 후 `claude plugin update hwpx-kit@hwpx-kit-market`** — 마켓플레이스가 GitHub(6aneffy/hwpx-kit) 기준이라 push가 곧 배포다. git 추적 파일만 설치되므로 기밀 유출 불가. 🔴 레포 루트를 **로컬 경로**로 마켓플레이스 등록 금지 — 로컬 경로 설치는 gitignore 무시 통째 복사라 기밀까지 캐시에 복제된다 (실사고 1회). 구 단일 스킬 폴더(`~/.claude/skills/hwpx-kit/`)가 다시 생기면 이중 트리거되니 지울 것
+4. `skills/*/SKILL.md`(또는 templates/) 수정하면 **plugin.json 버전 범프 → 커밋·push → `claude plugin marketplace update hwpx-kit-market` → `claude plugin update hwpx-kit@hwpx-kit-market`** (버전 동일하면 업데이트 스킵됨, marketplace update 없이는 새 버전을 못 봄) — 마켓플레이스가 GitHub(6aneffy/hwpx-kit) 기준이라 push가 곧 배포다. git 추적 파일만 설치되므로 기밀 유출 불가. 🔴 레포 루트를 **로컬 경로**로 마켓플레이스 등록 금지 — 로컬 경로 설치는 gitignore 무시 통째 복사라 기밀까지 캐시에 복제된다 (실사고 1회). 구 단일 스킬 폴더(`~/.claude/skills/hwpx-kit/`)가 다시 생기면 이중 트리거되니 지울 것
 
 ## 엔진 특성 (알아두면 삽질 안 함)
 
