@@ -151,3 +151,52 @@ def test_cli_fill_batch(cert_form, roster_json, template_json, tmp_path, capsys)
     assert code == 0
     assert env["ok"] is True
     assert env["data"]["succeeded"] == 3
+
+
+# ── fill --secure (엄격 모드) ─────────────────────────────────
+
+def test_fill_secure_strict_no_partial(cert_form, tmp_path):
+    """--secure: 하나라도 못 채우면 산출물을 남기지 않는다 (반쯤 채워진 PII 문서 방지)."""
+    import os
+
+    from hwpx_kit.commands.fill import run_fill_secure
+
+    out = str(tmp_path / "o.hwpx")
+    result = run_fill_secure(cert_form, {"marker:성명": "김철수", "marker:없는키": "x"}, out)
+    assert result["ok"] is False
+    assert not os.path.exists(out)          # 부분 산출물 없음
+    # 실패 사유에 값이 노출되지 않는다
+    import json as _json
+
+    assert "김철수" not in _json.dumps(result, ensure_ascii=False)
+
+
+def test_fill_secure_success(cert_form, tmp_path):
+    import os
+
+    from hwpx_kit.commands.fill import run_fill_secure
+
+    out = str(tmp_path / "o.hwpx")
+    result = run_fill_secure(cert_form, {"marker:성명": "김철수", "marker:과정명": "AI"}, out)
+    assert result["ok"] is True and os.path.exists(out)
+    assert result["applied_count"] == 2
+    # 값 자체는 결과 JSON에 없음
+    import json as _json
+
+    assert "김철수" not in _json.dumps(result, ensure_ascii=False)
+
+
+def test_cli_fill_secure(cert_form, tmp_path, capsys):
+    import json as _json
+
+    from hwpx_kit.cli import main
+
+    values = tmp_path / "v.json"
+    values.write_text(_json.dumps({"marker:성명": "김철수", "marker:과정명": "AI"},
+                                  ensure_ascii=False), encoding="utf-8")
+    out = str(tmp_path / "o.hwpx")
+    code = main(["fill", cert_form, "--data", str(values), "--out", out,
+                 "--secure", "--json"])
+    captured = capsys.readouterr().out
+    assert code == 0
+    assert "김철수" not in captured          # stdout에 값 비노출

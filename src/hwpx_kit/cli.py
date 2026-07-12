@@ -50,6 +50,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pf.add_argument("file")
     pf.add_argument("--data", required=True, help="fill_key: 값 매핑 JSON 파일")
     pf.add_argument("--out", required=True, help="출력 hwpx 경로")
+    pf.add_argument("--secure", action="store_true",
+                    help="엄격 모드(민감정보용) — 하나라도 못 채우면 산출물 없이 실패, 출력에 값 비노출")
     pf.add_argument("--json", action="store_true")
 
     pr = sub.add_parser("read", help="본문을 Markdown/텍스트로 추출")
@@ -229,9 +231,16 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "fill":
             with open(args.data, encoding="utf-8") as fh:
                 mapping = json.load(fh)
-            data = run_fill(args.file, mapping, args.out)
-            if data["unmatched"]:
-                exit_code = 2
+            if args.secure:
+                from hwpx_kit.commands.fill import run_fill_secure
+
+                data = run_fill_secure(args.file, mapping, args.out)
+                if not data["ok"]:
+                    exit_code = 1
+            else:
+                data = run_fill(args.file, mapping, args.out)
+                if data["unmatched"]:
+                    exit_code = 2
         elif args.command == "read":
             data = run_read(args.file, fmt=args.format)
         elif args.command == "convert":

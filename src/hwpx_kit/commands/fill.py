@@ -77,6 +77,31 @@ def _apply_one(ad: HwpxEngineAdapter, fill_key: str, value: str) -> str | None:
     return "알 수 없는 fill_key 형식 (clickhere:/marker:/table:/text:/delete:/bold:/underline: 중 하나여야 함)"
 
 
+def run_fill_secure(path: str, data: dict[str, str], out_path: str) -> dict:
+    """엄격 모드 — 민감정보(PII) 채우기용.
+
+    ① 하나라도 못 채우면 산출물을 남기지 않는다 (반쯤 채워진 개인정보 문서 방지)
+    ② 결과에 값을 절대 노출하지 않는다 — 키 목록·개수만.
+    값 파일은 CLI만 읽는 것이 전제 (스킬 규약: Claude는 경로만 전달).
+    """
+    import os as _os
+
+    result = run_fill(path, data, out_path)
+    if result["unmatched"]:
+        try:
+            _os.remove(result["out"])
+        except OSError:
+            pass
+        return {
+            "ok": False,
+            "out": None,
+            "applied_count": len(result["applied"]),
+            "unmatched_keys": [u["key"] for u in result["unmatched"]],
+            "reason": "일부 키를 채우지 못해 산출물을 만들지 않았습니다 (--secure 엄격 모드)",
+        }
+    return {"ok": True, "out": result["out"], "applied_count": len(result["applied"])}
+
+
 def run_fill(path: str, data: dict[str, str], out_path: str) -> dict:
     ad = HwpxEngineAdapter.open(path)
     applied: list[str] = []
