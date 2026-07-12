@@ -89,7 +89,7 @@ def test_image_add_rejects_missing_anchor(doc_with_anchor, png_file, tmp_path):
 
 def test_image_add_rejects_bad_format(doc_with_anchor, tmp_path):
     bad = tmp_path / "note.txt"
-    bad.write_text("텍스트")
+    bad.write_text("텍스트", encoding="utf-8")
     with pytest.raises(ValueError, match="형식"):
         run_image_add(doc_with_anchor, image_path=str(bad),
                       at_text="서명: (인)", table=None, cell=None,
