@@ -13,3 +13,4 @@ private/
 incoming/
 node_modules/
 mcp/
+.playwright-mcp/
