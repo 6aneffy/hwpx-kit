@@ -144,3 +144,42 @@ def test_cli_fmt_requires_exactly_one(capsys):
     env = _last_json(capsys)
     assert code == 1
     assert env["ok"] is False
+
+
+# ── 표 단위 변환 (천원/백만원) ────────────────────────────────
+
+def test_scale_amount_to_cheonwon():
+    from hwpx_kit.format import scale_amount
+
+    # 관습: 반올림, 세 자리 콤마
+    assert scale_amount(1234567, "천원") == "1,235"
+    assert scale_amount(1000, "천원") == "1"
+    assert scale_amount(37000000, "천원") == "37,000"
+
+
+def test_scale_amount_to_baekmanwon():
+    from hwpx_kit.format import scale_amount
+
+    assert scale_amount(37000000, "백만원") == "37"
+    assert scale_amount(1234567890, "백만원") == "1,235"
+    assert scale_amount(500000, "백만원") == "1"   # 반올림 올라감
+
+
+def test_scale_amount_rejects_unknown_unit():
+    import pytest as _pytest
+
+    from hwpx_kit.format import scale_amount
+
+    with _pytest.raises(ValueError):
+        scale_amount(1000, "억원")
+
+
+def test_cli_fmt_scale(capsys):
+    import json as _json
+
+    from hwpx_kit.cli import main
+
+    code = main(["fmt", "--scale", "1,234,567", "--unit", "천원", "--json"])
+    env = _json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 0
+    assert env["data"]["result"] == "1,235"

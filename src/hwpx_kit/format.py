@@ -92,3 +92,21 @@ def korean_age(yymmdd: str, base: str | None = None) -> str:
     if age < 0:
         raise ValueError("기준일이 생년월일보다 앞섭니다.")
     return f"{digits}({age})"
+
+
+_SCALE_UNITS = {"천원": 1_000, "백만원": 1_000_000}
+
+
+def scale_amount(won: int, unit: str) -> str:
+    """원 단위 금액 → 천원/백만원 단위 문자열 (반올림, 세 자리 콤마).
+
+    예산표 "단위: 천원" 관습용. 반내림이 필요한 특수 규정은 호출자가 처리.
+    """
+    from decimal import ROUND_HALF_UP, Decimal
+
+    divisor = _SCALE_UNITS.get(unit)
+    if divisor is None:
+        raise ValueError(f"지원 단위: {', '.join(_SCALE_UNITS)} (받은 값: {unit})")
+    # 파이썬 round()는 은행가 반올림(0.5→0) — 행정 관습은 사사오입(0.5→1)
+    scaled = int((Decimal(won) / Decimal(divisor)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return f"{scaled:,}"

@@ -196,6 +196,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pt.add_argument("--date", help="날짜 YYYYMMDD → YYYY.M.D.(요일)")
     pt.add_argument("--age", help="생년월일 YYMMDD → YYMMDD(만나이)")
     pt.add_argument("--base", help="만나이 기준일 YYYYMMDD (기본 오늘)")
+    pt.add_argument("--scale", help="원 단위 금액 → --unit 단위로 환산 (반올림·콤마)")
+    pt.add_argument("--unit", default="천원", choices=["천원", "백만원"], help="--scale 대상 단위 (기본 천원)")
     pt.add_argument("--json", action="store_true")
 
     return p
@@ -240,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
             data = run_fmt(
                 amount=args.amount, date=args.date, age=args.age,
                 base=args.base, style=args.style,
+                scale=args.scale, unit=args.unit,
             )
         elif args.command == "row-height":
             data = run_row_height(
