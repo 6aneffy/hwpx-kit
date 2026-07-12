@@ -1,6 +1,6 @@
 ---
 name: gongmun-format
-description: 행안부 공문서 작성 규약 — 글머리 위계(□○-※*), 날짜·금액 표기, 홑낫표, 어절정리, 복붙 깨짐 복구. 공문·보도자료·계획안 초안 작성이나 "공문 형식으로", "공문서 규정대로", "보고서 양식 맞춰줘" 요청 시 사용. Triggers: Korean government document style, gongmun formatting.
+description: 행안부 공문서 작성 규약 — 글머리 위계(□○-※*), 날짜·금액 표기, 홑낫표, 어절정리, 복붙 깨짐 복구, 제출 전 기계 검수(inspect). 공문·보도자료·계획안 초안 작성이나 "공문 형식으로", "공문서 규정대로", "보고서 양식 맞춰줘", "제출 전에 검토해줘" 요청 시 사용. Triggers: Korean government document style, gongmun formatting, review before submission.
 ---
 
 # gongmun-format: 행안부 공문 작성 규약
@@ -33,6 +33,17 @@ description: 행안부 공문서 작성 규약 — 글머리 위계(□○-※*)
   (format-convert 스킬 참고. 민간 서류는 ilgeum 스타일)
 - **법령·문서명**: 홑낫표 `「」` 로 감싼다 — `「행정 효율과 협업 촉진에 관한 규정」`
 - **증감·비율**: table-calc 스킬의 표기 관습(△·%p 등) 따름
+
+## 제출 전 검수 — "검토해줘" (기계 검사 먼저, 판단은 그 위에)
+
+`hwpx-kit inspect <문서.hwpx> --json` — 결정론 검사 3종 (fmt와 같은 "암산 금지" 원칙):
+- **residue**: 채우다 만 {{마커}}·○○○ 자리표시·"(예시)" 안내문 잔존
+- **gongmun**: 날짜 하이픈 표기(2026-07-10 → `2026. 7. 10.`), 오전/오후 시각(→ 24시각제)
+- **pii**: 주민번호·휴대전화·이메일 잔존 (공개 배포 문서면 특히)
+
+종료코드 2 = 위반 있음. `issues[]`의 code·context를 **사람 말로 요약**해 보여주고,
+수정할 항목을 확정받아 fill(text:/delete:)로 고친 뒤 재검사. 기계 검사가 못 보는
+것(위계 건너뜀, 어색한 문장, 내용 누락)은 read 출력을 직접 읽고 이 스킬 규약으로 판단.
 
 ## 텍스트 정리 (재작성 계열 — 우리가 범피스보다 잘하는 것)
 

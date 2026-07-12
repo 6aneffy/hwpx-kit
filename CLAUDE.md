@@ -26,7 +26,7 @@ skills/*/SKILL.md → Claude Code 플러그인 스킬들 (.claude-plugin/plugin.
  └─ office-export    → hwpx→docx(변환)·pptx/xlsx(재구성, officecli 선택 의존)
 
 CLI (cli.py) — JSON 봉투, 종료코드 0/1/2
- └─ commands/ (analyze·fill·read·validate·convert·export·render·generate·fmt·row-add·row-del·row-height·table-clear·table-set·table-copy·table-map·table-new·page-break·outline)
+ └─ commands/ (analyze·fill·fill-batch·inspect·read·validate·convert·export·render·generate·fmt·row-add·row-del·row-height·table-clear·table-set·table-copy·table-map·table-new·page-break·outline)
      ├─ format.py ← 순수함수 (금액한글화·요일·만나이) — 엔진 임포트 금지, fmt는 파일 인수 없음(FILE_NOT_FOUND 가드 우회)
      └─ adapter/ ← 명령 계층은 어댑터 인터페이스만 사용 (엔진 직접 import 금지)
          ├─ hwpx_engine.py   → python-hwpx (hwpx 분석·채우기·검증·표 조작, 순수 Python)

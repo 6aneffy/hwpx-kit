@@ -91,6 +91,19 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     ph.add_argument("--json", action="store_true")
 
+    pfb = sub.add_parser("fill-batch", help="명단 × 양식 일괄 생성 (메일머지) — 위촉장·수료증·통지서 N부")
+    pfb.add_argument("file", help="양식 hwpx")
+    pfb.add_argument("--rows", required=True, help="명단 파일 (xlsx: 1행 헤더 / csv / json 객체 배열)")
+    pfb.add_argument("--template", required=True, help="fill 데이터 JSON — 값 속 {열이름}이 행마다 치환됨")
+    pfb.add_argument("--out-dir", required=True, help="출력 폴더 (없으면 생성)")
+    pfb.add_argument("--name", required=True, help='파일명 패턴, 예: "{성명}_위촉장.hwpx" (충돌 시 _2 접미)')
+    pfb.add_argument("--json", action="store_true")
+
+    pin = sub.add_parser("inspect", help="제출 전 기계 검수 — 잔여물({{마커}}·○○○)·공문 표기(날짜·시각)·개인정보. 위반 시 종료코드 2")
+    pin.add_argument("file")
+    pin.add_argument("--checks", help="쉼표 구분: residue,gongmun,pii (생략 시 전부)")
+    pin.add_argument("--json", action="store_true")
+
     pra = sub.add_parser("row-add", help="표 행 추가 — 기준 행 서식·높이 승계, 내용은 비움 (세로 병합 걸리면 거부)")
     pra.add_argument("file")
     pra.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -214,6 +227,24 @@ def main(argv: list[str] | None = None) -> int:
                 args.file, table=args.table, like=args.like,
                 rows=parse_rows_spec(args.rows), out_path=args.out,
             )
+        elif args.command == "fill-batch":
+            from hwpx_kit.commands.fill_batch import run_fill_batch
+
+            data = run_fill_batch(
+                args.file, rows_path=args.rows, template_path=args.template,
+                out_dir=args.out_dir, name_pattern=args.name,
+            )
+            if not data["all_ok"]:
+                exit_code = 2
+        elif args.command == "inspect":
+            from hwpx_kit.commands.inspect_doc import run_inspect
+
+            data = run_inspect(
+                args.file,
+                checks=[c.strip() for c in args.checks.split(",")] if args.checks else None,
+            )
+            if not data["clean"]:
+                exit_code = 2
         elif args.command == "row-add":
             from hwpx_kit.commands.table_rows import run_row_add
 
