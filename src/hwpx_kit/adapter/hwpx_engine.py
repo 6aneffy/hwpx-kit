@@ -671,6 +671,71 @@ class HwpxEngineAdapter:
             self._mark_sections_dirty()
         return len(targets)
 
+    _HWPUNIT_PER_MM = 7200 / 25.4  # 1mm ≈ 283.46 hwpunit
+
+    def insert_image(self, image_path: str, *, at_text: str | None = None,
+                     table_index: int | None = None, cell: tuple[int, int] | None = None,
+                     width_mm: float = 20.0, height_mm: float | None = None) -> dict:
+        """이미지를 문단(원문 앵커) 또는 표 셀에 글자처럼취급으로 삽입.
+
+        엔진 2단계: add_image(바이너리 등록) → paragraph.add_picture(배치).
+        height_mm 생략 시 정사각(width와 동일) — 비율 유지가 필요하면 호출자가 지정.
+        """
+        import os as _os
+
+        ext = _os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpeg":
+            ext = "jpg"
+        if ext not in ("png", "jpg", "bmp", "gif"):
+            raise ValueError(f"지원하지 않는 이미지 형식: .{ext} (png/jpg/bmp/gif)")
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+
+        width = int(width_mm * self._HWPUNIT_PER_MM)
+        height = int((height_mm if height_mm is not None else width_mm) * self._HWPUNIT_PER_MM)
+
+        with quiet_engine():
+            if cell is not None:
+                if table_index is None:
+                    raise ValueError("--cell은 --table과 함께 지정하세요.")
+                from hwpx.tools import table_navigation as tn
+
+                tables = tn._collect_document_tables(self._doc)
+                if not 0 <= table_index < len(tables):
+                    raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+                r, c = cell
+                paragraphs = tables[table_index].table.cell(r, c).paragraphs
+                target = list(paragraphs)[0]
+            else:
+                target = self._find_anchor_paragraph(anchor_text=at_text,
+                                                     after_table=table_index)
+            item_id = self._doc.add_image(image_data, ext)
+            target.add_picture(item_id, width=width, height=height, treat_as_char=True)
+        return {"binary_item_id": item_id, "width": width, "height": height}
+
+    def set_header_footer(self, *, header: str | None = None,
+                          footer: str | None = None,
+                          page_number: str | None = None) -> list[str]:
+        """머리말/꼬리말 텍스트·쪽번호 설정. 적용 항목 이름 목록 반환."""
+        applied: list[str] = []
+        align_map = {"left": "LEFT", "center": "CENTER", "right": "RIGHT"}
+        with quiet_engine():
+            if header is not None:
+                self._doc.set_header_text(header)
+                applied.append("header")
+            if footer is not None:
+                self._doc.set_footer_text(footer)
+                applied.append("footer")
+            if page_number is not None:
+                align = align_map.get(page_number.lower())
+                if align is None:
+                    raise ValueError(f"쪽번호 위치는 left/center/right 중 하나: {page_number}")
+                self._doc.set_page_number(align=align)
+                applied.append("page_number")
+        if not applied:
+            raise ValueError("--header/--footer/--page-number 중 하나는 지정하세요.")
+        return applied
+
     def save_copy(self, out_path: str) -> str:
         out_abs = os.path.abspath(out_path)
         if out_abs == self._source_path:

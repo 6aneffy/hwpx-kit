@@ -104,6 +104,25 @@ def _build_parser() -> argparse.ArgumentParser:
     pin.add_argument("--checks", help="쉼표 구분: residue,gongmun,pii (생략 시 전부)")
     pin.add_argument("--json", action="store_true")
 
+    pim = sub.add_parser("image-add", help="이미지(사진·직인) 삽입 — 문단 앵커 또는 표 셀에 글자처럼취급")
+    pim.add_argument("file")
+    pim.add_argument("--image", required=True, help="이미지 파일 (png/jpg/bmp/gif)")
+    pim.add_argument("--at-text", help="이 원문 문단에 삽입 (공백 정규화 전체 일치)")
+    pim.add_argument("--table", type=int, help="표 인덱스 (--cell과 함께)")
+    pim.add_argument("--cell", help="셀 좌표 'R,C' (0-기준)")
+    pim.add_argument("--width-mm", type=float, default=20.0, help="가로 크기 mm (기본 20)")
+    pim.add_argument("--height-mm", type=float, help="세로 크기 mm (생략 시 가로와 동일)")
+    pim.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pim.add_argument("--json", action="store_true")
+
+    phf = sub.add_parser("header-footer", help="머리말/꼬리말 텍스트·쪽번호 설정")
+    phf.add_argument("file")
+    phf.add_argument("--header", help="머리말 텍스트")
+    phf.add_argument("--footer", help="꼬리말 텍스트")
+    phf.add_argument("--page-number", help="쪽번호 위치: left/center/right")
+    phf.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    phf.add_argument("--json", action="store_true")
+
     pra = sub.add_parser("row-add", help="표 행 추가 — 기준 행 서식·높이 승계, 내용은 비움 (세로 병합 걸리면 거부)")
     pra.add_argument("file")
     pra.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -245,6 +264,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             if not data["clean"]:
                 exit_code = 2
+        elif args.command == "image-add":
+            from hwpx_kit.commands.image_add import run_image_add
+
+            data = run_image_add(
+                args.file, image_path=args.image, at_text=args.at_text,
+                table=args.table, cell=args.cell,
+                width_mm=args.width_mm, height_mm=args.height_mm,
+                out_path=args.out,
+            )
+        elif args.command == "header-footer":
+            from hwpx_kit.commands.header_footer import run_header_footer
+
+            data = run_header_footer(
+                args.file, header=args.header, footer=args.footer,
+                page_number=args.page_number, out_path=args.out,
+            )
         elif args.command == "row-add":
             from hwpx_kit.commands.table_rows import run_row_add
 
