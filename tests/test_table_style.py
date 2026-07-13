@@ -128,3 +128,63 @@ def test_cli_col_width(grid_doc, tmp_path, capsys):
                  "--out", out, "--json"])
     env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0 and env["ok"] is True
+
+
+# ── 유령 셀(크기 0 tc) 제거 — 한글 네이티브 병합과 동일하게 ──────
+
+def _zero_cells(path):
+    import zipfile
+
+    x = zipfile.ZipFile(path).read("Contents/section0.xml").decode("utf-8")
+    return x.count('cellSz width="0" height="0"')
+
+
+def test_merge_leaves_no_ghost_cells(grid_doc, tmp_path):
+    """엔진 merge는 흡수 셀을 크기0 tc로 남긴다 — 한글 조판이 유령에 최소
+    폭을 줘서 뒤 셀이 표 밖으로 밀림 (실캡처 실증). 한글 원본처럼 제거해야 함."""
+    out = str(tmp_path / "o.hwpx")
+    run_cell_merge(grid_doc, table=0, cell_range="0,0:1,0", out_path=out)
+    assert _zero_cells(out) == 0
+    # 병합·이웃 셀 정상
+    t = _table(out)
+    assert t.cell(0, 0).span == (2, 1)
+    from hwpx.tools import table_navigation as tn
+    assert tn._cell_text(t, 0, 2) is not None  # 그리드 접근 정상
+
+
+def test_split_after_ghost_removal(grid_doc, tmp_path):
+    """유령 제거된 표의 병합 해제 — 엔진 split이 아니라 어댑터 자체 구현.
+    흡수됐던 좌표에 셀이 재생성되고 기입 가능해야 함."""
+    mid = str(tmp_path / "m.hwpx")
+    out = str(tmp_path / "o.hwpx")
+    run_cell_merge(grid_doc, table=0, cell_range="0,0:1,1", out_path=mid)
+    run_cell_split(mid, table=0, cell="0,0", out_path=out)
+    t = _table(out)
+    assert t.cell(0, 0).span == (1, 1)
+    # 재생성 좌표에 기입 → 저장 → 재열기 생존
+    from hwpx.document import HwpxDocument
+    from hwpx.tools import table_navigation as tn
+
+    from hwpx_kit.commands.table_set import run_table_set
+
+    out2 = str(tmp_path / "o2.hwpx")
+    run_table_set(out, table=0, assignments=[(1, 1, "복원기입")], out_path=out2)
+    t2 = _table(out2)
+    assert tn._cell_text(t2, 1, 1).strip() == "복원기입"
+    assert _zero_cells(out2) == 0
+
+
+def test_build_leaves_no_ghost_cells(grid_doc, tmp_path):
+    import json as _json
+
+    from hwpx_kit.commands.table_build import run_table_build
+
+    spec = {"rows": 3, "cols": 3, "merges": ["0,0:1,0", "2,0:2,2"],
+            "cells": {"0,1": "값"}}
+    sp = tmp_path / "s.json"
+    sp.write_text(_json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    out = str(tmp_path / "o.hwpx")
+    # grid_doc의 첫 문단을 앵커로 못 쓰니 표 뒤에
+    run_table_build(grid_doc, spec_path=str(sp), at_text=None,
+                    out_path=out, after_table=0)
+    assert _zero_cells(out) == 0

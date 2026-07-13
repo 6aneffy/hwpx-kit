@@ -736,6 +736,104 @@ class HwpxEngineAdapter:
             raise ValueError("--header/--footer/--page-number 중 하나는 지정하세요.")
         return applied
 
+    def _remove_ghost_cells(self, table_el) -> int:
+        """엔진 merge_cells가 남기는 크기 0 유령 tc 제거 (한글 네이티브와 동일하게).
+
+        한글 조판이 유령 셀에 최소 폭을 부여해 뒤 셀이 표 밖으로 밀린다
+        (실캡처 실증 2026-07-12). 한글 원본 파일엔 흡수 셀 tc가 아예 없음
+        (seoul-body 병합 anchor 50곳·크기0 tc 0개로 확인). 제거 후에도 엔진
+        그리드는 anchor의 rowSpan/colSpan으로 정상 계산됨 (실험 확인).
+        """
+        removed = 0
+        for tc in list(table_el.iter()):
+            if not tc.tag.endswith("}tc"):
+                continue
+            sz = next((ch for ch in tc if ch.tag.endswith("}cellSz")), None)
+            if sz is not None and sz.get("width") == "0" and sz.get("height") == "0":
+                tc.getparent().remove(tc)
+                removed += 1
+        if removed:
+            self._mark_sections_dirty()
+        return removed
+
+    def merge_cells(self, table_index: int, r1: int, c1: int, r2: int, c2: int) -> None:
+        """셀 병합 + 유령 제거. cell-merge/table-build 공용."""
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table = tables[table_index].table
+            table.merge_cells(r1, c1, r2, c2)
+            self._remove_ghost_cells(table.element)
+
+    def split_cell(self, table_index: int, row: int, col: int) -> int:
+        """병합 해제 — 자체 구현 (엔진 split은 유령 셀 전제 + lxml 혼용 버그).
+
+        anchor의 span을 1x1로 되돌리고, 흡수됐던 좌표마다 anchor를 본뜬 tc를
+        재생성(내용 비움, 크기는 균등 분할). 재생성 셀 수 반환.
+        """
+        import copy as _copy
+
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table = tables[table_index].table
+            anchor = table.cell(row, col)
+            rs, cs = anchor.span
+            if rs == 1 and cs == 1:
+                raise ValueError(f"({row},{col})은 병합 셀이 아닙니다.")
+            anchor_tc = anchor.element
+
+            def _child(tc, suffix):
+                return next((ch for ch in tc if ch.tag.endswith("}" + suffix)), None)
+
+            sz = _child(anchor_tc, "cellSz")
+            total_w = int(sz.get("width", "0"))
+            total_h = int(sz.get("height", "0"))
+            each_w = max(1, total_w // cs)
+            each_h = max(1, total_h // rs)
+
+            # anchor 축소
+            _child(anchor_tc, "cellSpan").set("rowSpan", "1")
+            _child(anchor_tc, "cellSpan").set("colSpan", "1")
+            sz.set("width", str(each_w))
+            sz.set("height", str(each_h))
+
+            trs = self._table_trs(table.element)
+            created = 0
+            for r in range(row, row + rs):
+                for c in range(col, col + cs):
+                    if r == row and c == col:
+                        continue
+                    new_tc = _copy.deepcopy(anchor_tc)
+                    for node in new_tc.iter():
+                        if node.tag.endswith("}t"):
+                            node.text = ""
+                    addr = _child(new_tc, "cellAddr")
+                    addr.set("rowAddr", str(r))
+                    addr.set("colAddr", str(c))
+                    tr = trs[r]
+                    # colAddr 순서 유지 삽입
+                    inserted = False
+                    for sib in tr:
+                        if not sib.tag.endswith("}tc"):
+                            continue
+                        sib_addr = _child(sib, "cellAddr")
+                        if sib_addr is not None and int(sib_addr.get("colAddr", "0")) > c:
+                            sib.addprevious(new_tc)
+                            inserted = True
+                            break
+                    if not inserted:
+                        tr.append(new_tc)
+                    created += 1
+            self._mark_sections_dirty()
+        return created
+
     _ALIGN_MAP = {"left": "LEFT", "center": "CENTER", "right": "RIGHT",
                   "justify": "JUSTIFY"}
 
@@ -817,6 +915,8 @@ class HwpxEngineAdapter:
 
             for r1, c1, r2, c2 in merges:
                 table.merge_cells(r1, c1, r2, c2)
+            if merges:
+                self._remove_ghost_cells(table.element)
             if col_widths:
                 table.set_column_widths(col_widths)
             if header_color:

@@ -43,27 +43,20 @@ def _get_table(ad: HwpxEngineAdapter, table_index: int):
 
 
 def run_cell_merge(path: str, table: int, cell_range: str, out_path: str) -> dict:
-    from hwpx_kit.output import quiet_engine
-
     r1, c1, r2, c2 = _parse_range(cell_range)
     ad = HwpxEngineAdapter.open(path)
-    with quiet_engine():
-        t = _get_table(ad, table)
-        t.merge_cells(r1, c1, r2, c2)
+    ad.merge_cells(table, r1, c1, r2, c2)
     out = ad.save_copy(out_path)
     return {"file": path, "out": out, "table": table, "merged": cell_range}
 
 
 def run_cell_split(path: str, table: int, cell: str, out_path: str) -> dict:
-    from hwpx_kit.output import quiet_engine
-
     r, c = _parse_cell(cell)
     ad = HwpxEngineAdapter.open(path)
-    with quiet_engine():
-        t = _get_table(ad, table)
-        t.split_merged_cell(r, c)
+    created = ad.split_cell(table, r, c)
     out = ad.save_copy(out_path)
-    return {"file": path, "out": out, "table": table, "split": cell}
+    return {"file": path, "out": out, "table": table, "split": cell,
+            "restored_cells": created}
 
 
 def run_cell_color(path: str, table: int, cell_range: str, color: str,
