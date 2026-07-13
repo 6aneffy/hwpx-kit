@@ -125,6 +125,22 @@ def _build_parser() -> argparse.ArgumentParser:
     phf.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     phf.add_argument("--json", action="store_true")
 
+    ptb = sub.add_parser("table-build", help="선언형 원샷 표 생성 — 스펙 JSON(크기·열폭·병합·헤더·내용·정렬) 하나로 완성 표")
+    ptb.add_argument("file")
+    ptb.add_argument("--spec", required=True, help="표 스펙 JSON 파일")
+    ptb.add_argument("--at-text", help="이 원문 문단에 삽입")
+    ptb.add_argument("--after-table", type=int, help="이 표 뒤에 삽입 (0-기준)")
+    ptb.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    ptb.add_argument("--json", action="store_true")
+
+    pca = sub.add_parser("cell-align", help="셀 텍스트 정렬 — 범위 일괄 (left/center/right/justify)")
+    pca.add_argument("file")
+    pca.add_argument("--table", type=int, required=True)
+    pca.add_argument("--range", dest="cell_range", required=True, help="'R1,C1:R2,C2'")
+    pca.add_argument("--align", required=True, choices=["left", "center", "right", "justify"])
+    pca.add_argument("--out", required=True)
+    pca.add_argument("--json", action="store_true")
+
     pcm = sub.add_parser("cell-merge", help="표 셀 병합 — 범위 'R1,C1:R2,C2'")
     pcm.add_argument("file")
     pcm.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -321,6 +337,18 @@ def main(argv: list[str] | None = None) -> int:
                 args.file, header=args.header, footer=args.footer,
                 page_number=args.page_number, out_path=args.out,
             )
+        elif args.command == "table-build":
+            from hwpx_kit.commands.table_build import run_table_build
+
+            data = run_table_build(args.file, spec_path=args.spec,
+                                   at_text=args.at_text, out_path=args.out,
+                                   after_table=args.after_table)
+        elif args.command == "cell-align":
+            from hwpx_kit.commands.table_build import run_cell_align
+
+            data = run_cell_align(args.file, table=args.table,
+                                  cell_range=args.cell_range,
+                                  align=args.align, out_path=args.out)
         elif args.command == "cell-merge":
             from hwpx_kit.commands.table_style import run_cell_merge
 

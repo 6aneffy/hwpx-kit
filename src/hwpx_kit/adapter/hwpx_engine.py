@@ -736,6 +736,130 @@ class HwpxEngineAdapter:
             raise ValueError("--header/--footer/--page-number 중 하나는 지정하세요.")
         return applied
 
+    _ALIGN_MAP = {"left": "LEFT", "center": "CENTER", "right": "RIGHT",
+                  "justify": "JUSTIFY"}
+
+    def _align_cell_paragraphs(self, table, r1: int, c1: int, r2: int, c2: int,
+                               align: str) -> int:
+        """범위 셀 문단들에 정렬 paraPr 참조 적용. 적용 문단 수 반환.
+
+        엔진 ensure_paragraph_alignment로 header에 정렬 paraPr을 확보하고
+        셀 문단의 paraPrIDRef를 바꾼다 — 원시 참조 변경이므로 dirty 필수
+        (호출자가 아니라 여기서 바로 마킹).
+        """
+        hw_align = self._ALIGN_MAP.get(align.lower())
+        if hw_align is None:
+            raise ValueError(f"정렬은 left/center/right/justify 중 하나: {align}")
+        header = self._doc._root._headers[0]
+        pr_id = str(header.ensure_paragraph_alignment(hw_align))
+        count = 0
+        for r in range(r1, r2 + 1):
+            for c in range(c1, c2 + 1):
+                if not self._cell_is_anchor(table, r, c):
+                    continue
+                try:
+                    cell = table.cell(r, c)
+                except Exception:
+                    continue
+                for p in cell.paragraphs:
+                    p.element.set("paraPrIDRef", pr_id)
+                    count += 1
+        self._mark_sections_dirty()
+        return count
+
+    def build_table(self, spec: dict, *, anchor_text: str | None = None,
+                    after_table: int | None = None) -> dict:
+        """선언형 원샷 표 생성 — 크기·열폭·병합·헤더 스타일·내용·정렬을 스펙 하나로.
+
+        적용 순서가 계약: 생성 → 병합 → 열폭 → 헤더 색/볼드 → 내용 → 정렬.
+        (병합을 내용보다 먼저 해야 anchor 좌표 기입이 안전하고,
+        정렬은 문단이 다 생긴 마지막에)
+        """
+        rows, cols = int(spec["rows"]), int(spec["cols"])
+        if rows < 1 or cols < 1:
+            raise ValueError(f"rows/cols는 1 이상: {rows}x{cols}")
+
+        col_widths = spec.get("col_widths")
+        if col_widths is not None and len(col_widths) != cols:
+            raise ValueError(f"열 수 불일치: cols={cols}, col_widths={len(col_widths)}개")
+
+        cells: dict[str, str] = spec.get("cells", {})
+        parsed_cells = []
+        for key, value in cells.items():
+            try:
+                r, c = (int(x) for x in key.split(","))
+            except ValueError:
+                raise ValueError(f"cells 키 형식은 'R,C': {key!r}") from None
+            if not (0 <= r < rows and 0 <= c < cols):
+                raise ValueError(f"cells 좌표 범위 밖: {key} (표 {rows}x{cols})")
+            parsed_cells.append((r, c, str(value)))
+
+        merges = []
+        for m in spec.get("merges", []):
+            try:
+                start, end = m.split(":")
+                r1, c1 = (int(x) for x in start.split(","))
+                r2, c2 = (int(x) for x in end.split(","))
+            except ValueError:
+                raise ValueError(f"merges 형식은 'R1,C1:R2,C2': {m!r}") from None
+            if not (0 <= r1 <= r2 < rows and 0 <= c1 <= c2 < cols):
+                raise ValueError(f"merges 범위 밖: {m} (표 {rows}x{cols})")
+            merges.append((r1, c1, r2, c2))
+
+        header_rows = int(spec.get("header_rows", 0))
+        header_color = spec.get("header_color")
+        align = spec.get("align")
+
+        with quiet_engine():
+            target = self._find_anchor_paragraph(anchor_text=anchor_text,
+                                                 after_table=after_table)
+            table = target.add_table(rows, cols)
+
+            for r1, c1, r2, c2 in merges:
+                table.merge_cells(r1, c1, r2, c2)
+            if col_widths:
+                table.set_column_widths(col_widths)
+            if header_color:
+                for c in range(cols):
+                    if self._cell_is_anchor(table, 0, c):
+                        for hr in range(header_rows or 1):
+                            try:
+                                table.set_cell_shading(hr, c, header_color)
+                            except Exception:
+                                continue
+            for r, c, value in parsed_cells:
+                table.set_cell_text(r, c, value, logical=True)
+            if header_rows:
+                # 헤더 행 볼드 — 런 단위
+                for hr in range(header_rows):
+                    for c in range(cols):
+                        if not self._cell_is_anchor(table, hr, c):
+                            continue
+                        try:
+                            cell = table.cell(hr, c)
+                        except Exception:
+                            continue
+                        for p in cell.paragraphs:
+                            for run in p.runs:
+                                if (run.text or "").strip():
+                                    run.bold = True
+            if align:
+                self._align_cell_paragraphs(table, 0, 0, rows - 1, cols - 1, align)
+
+        return {"rows": rows, "cols": cols, "merges": len(merges),
+                "cells": len(parsed_cells), "align": align}
+
+    def align_cells(self, table_index: int, r1: int, c1: int, r2: int, c2: int,
+                    align: str) -> int:
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            return self._align_cell_paragraphs(tables[table_index].table,
+                                               r1, c1, r2, c2, align)
+
     def save_copy(self, out_path: str) -> str:
         out_abs = os.path.abspath(out_path)
         if out_abs == self._source_path:
