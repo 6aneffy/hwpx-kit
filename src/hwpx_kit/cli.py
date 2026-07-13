@@ -125,6 +125,35 @@ def _build_parser() -> argparse.ArgumentParser:
     phf.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     phf.add_argument("--json", action="store_true")
 
+    pcm = sub.add_parser("cell-merge", help="표 셀 병합 — 범위 'R1,C1:R2,C2'")
+    pcm.add_argument("file")
+    pcm.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    pcm.add_argument("--range", dest="cell_range", required=True, help="병합 범위 'R1,C1:R2,C2'")
+    pcm.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pcm.add_argument("--json", action="store_true")
+
+    pcs = sub.add_parser("cell-split", help="병합 셀 해제 — anchor 좌표 지정")
+    pcs.add_argument("file")
+    pcs.add_argument("--table", type=int, required=True)
+    pcs.add_argument("--cell", required=True, help="병합 anchor 'R,C'")
+    pcs.add_argument("--out", required=True)
+    pcs.add_argument("--json", action="store_true")
+
+    pcc = sub.add_parser("cell-color", help="셀 배경색 — 범위 일괄 (헤더 행 강조 등)")
+    pcc.add_argument("file")
+    pcc.add_argument("--table", type=int, required=True)
+    pcc.add_argument("--range", dest="cell_range", required=True, help="'R1,C1:R2,C2' (단일 셀은 같은 좌표 반복)")
+    pcc.add_argument("--color", required=True, help="6자리 hex, 예: #FFE9A9")
+    pcc.add_argument("--out", required=True)
+    pcc.add_argument("--json", action="store_true")
+
+    pcw = sub.add_parser("col-width", help="열 너비 비율 조정 — 셀 줄바꿈 잘림 해결")
+    pcw.add_argument("file")
+    pcw.add_argument("--table", type=int, required=True)
+    pcw.add_argument("--widths", required=True, help="열별 비율 쉼표 구분, 예: '2,3,5' (열 수와 일치)")
+    pcw.add_argument("--out", required=True)
+    pcw.add_argument("--json", action="store_true")
+
     pra = sub.add_parser("row-add", help="표 행 추가 — 기준 행 서식·높이 승계, 내용은 비움 (세로 병합 걸리면 거부)")
     pra.add_argument("file")
     pra.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -291,6 +320,30 @@ def main(argv: list[str] | None = None) -> int:
             data = run_header_footer(
                 args.file, header=args.header, footer=args.footer,
                 page_number=args.page_number, out_path=args.out,
+            )
+        elif args.command == "cell-merge":
+            from hwpx_kit.commands.table_style import run_cell_merge
+
+            data = run_cell_merge(args.file, table=args.table,
+                                  cell_range=args.cell_range, out_path=args.out)
+        elif args.command == "cell-split":
+            from hwpx_kit.commands.table_style import run_cell_split
+
+            data = run_cell_split(args.file, table=args.table,
+                                  cell=args.cell, out_path=args.out)
+        elif args.command == "cell-color":
+            from hwpx_kit.commands.table_style import run_cell_color
+
+            data = run_cell_color(args.file, table=args.table,
+                                  cell_range=args.cell_range,
+                                  color=args.color, out_path=args.out)
+        elif args.command == "col-width":
+            from hwpx_kit.commands.table_style import run_col_width
+
+            data = run_col_width(
+                args.file, table=args.table,
+                widths=[float(w) for w in args.widths.split(",")],
+                out_path=args.out,
             )
         elif args.command == "row-add":
             from hwpx_kit.commands.table_rows import run_row_add
