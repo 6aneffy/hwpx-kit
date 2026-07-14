@@ -891,6 +891,17 @@ class HwpxEngineAdapter:
             )
         return {"binary_item_id": item_id, "size_mm": size_mm}
 
+    _HC_NS = "{http://www.hancom.co.kr/hwpml/2011/core}"
+    # 도형 기하 자식은 core(hc:) 네임스페이스 — 엔진이 line/rect에 hp:로 내보내는데
+    # 그 파일은 한글이 열기를 거부한다 (실증 2026-07-15, 한글 저장 실물 대조).
+    _SHAPE_GEOM_TAGS = ("startPt", "endPt", "pt0", "pt1", "pt2", "pt3")
+
+    def _fix_shape_geometry_ns(self, shape_el) -> None:
+        for ch in shape_el:
+            local = ch.tag.rsplit("}", 1)[-1]
+            if local in self._SHAPE_GEOM_TAGS:
+                ch.tag = self._HC_NS + local
+
     def add_shape(self, *, at_text: str, shape: str, width_mm: float,
                   height_mm: float, fill_color: str | None = None) -> None:
         """구분선/사각형/타원 — 엔진 네이티브, 글자처럼취급."""
@@ -899,13 +910,17 @@ class HwpxEngineAdapter:
         with quiet_engine():
             para = self._find_anchor_paragraph(anchor_text=at_text)
             if shape == "line":
-                self._doc.add_line(0, 0, w, h, paragraph=para)
+                created = self._doc.add_line(0, 0, w, h, paragraph=para)
             elif shape == "rect":
-                self._doc.add_rectangle(w, h, fill_color=fill_color, paragraph=para)
+                created = self._doc.add_rectangle(w, h, fill_color=fill_color,
+                                                  paragraph=para)
             elif shape == "ellipse":
-                self._doc.add_ellipse(w, h, fill_color=fill_color, paragraph=para)
+                created = self._doc.add_ellipse(w, h, fill_color=fill_color,
+                                                paragraph=para)
             else:
                 raise ValueError(f"shape는 line/rect/ellipse 중 하나: {shape}")
+            self._fix_shape_geometry_ns(created.element)
+            self._mark_sections_dirty()
 
     def set_header_footer(self, *, header: str | None = None,
                           footer: str | None = None,
@@ -1199,12 +1214,31 @@ class HwpxEngineAdapter:
                 margins_mm=margins or None,
             )
             if columns is not None:
-                first_para = self._first_paragraph_of_section(0)
                 gap = int((column_gap_mm or 8.0) * self._HWPUNIT_PER_MM)
-                self._doc.set_columns(int(columns), same_gap=gap,
-                                      paragraph=first_para)
+                self._set_section_columns(int(columns), gap)
                 result["columns"] = {"count": int(columns), "gap": gap}
         return result
+
+    def _set_section_columns(self, count: int, gap: int) -> None:
+        """섹션의 기존 colPr 속성을 수정해 다단 설정.
+
+        한글 저장본은 섹션 정의에 colPr이 항상 하나 있다 — 새 colPr을 덧붙이면
+        중복 + 엔진의 sameSz="true"(스키마는 "1")로 한글이 파일을 거부한다
+        (실증 2026-07-15). 그래서 추가가 아니라 기존 것을 고친다.
+        """
+        if not 1 <= count <= 255:
+            raise ValueError(f"다단 수는 1~255: {count}")
+        sec_el = self._doc._root._sections[0].element
+        colpr = next((el for el in sec_el.iter() if el.tag.endswith("}colPr")),
+                     None)
+        if colpr is None:
+            raise ValueError("섹션에 colPr이 없습니다 — 표준 hwpx가 아닌 파일. "
+                             "한글에서 한 번 저장 후 다시 시도하세요.")
+        colpr.set("colCount", str(count))
+        colpr.set("sameGap", str(gap) if count > 1 else "0")
+        if colpr.get("sameSz") in ("true", "false"):
+            colpr.set("sameSz", "1" if colpr.get("sameSz") == "true" else "0")
+        self._mark_sections_dirty()
 
     def _first_paragraph_of_section(self, section_index: int):
         """섹션 첫 문단의 엔진 문단 객체 — colPr 등 섹션급 ctrl 착지점."""
