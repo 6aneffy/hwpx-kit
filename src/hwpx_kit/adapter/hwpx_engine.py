@@ -1048,6 +1048,48 @@ class HwpxEngineAdapter:
             para = self._find_anchor_paragraph(anchor_text=at_text)
             self._doc.add_bookmark(name, paragraph=para)
 
+    def page_setup(self, *, paper: str | None = None,
+                   orientation: str | None = None,
+                   margins: dict[str, float] | None = None,
+                   columns: int | None = None,
+                   column_gap_mm: float | None = None) -> dict:
+        """용지·방향·여백·다단 — 엔진 set_page_setup 래핑.
+
+        다단은 엔진 기본 경로가 섹션 끝에 새 문단을 만들어 무의미하므로
+        섹션 첫 문단(secPr가 있는 곳)에 colPr을 직접 넣는다.
+        """
+        orient_map = {"portrait": "PORTRAIT", "landscape": "WIDELY"}
+        hw_orient = None
+        if orientation is not None:
+            hw_orient = orient_map.get(orientation.lower())
+            if hw_orient is None:
+                raise ValueError(f"방향은 portrait/landscape 중 하나: {orientation}")
+        with quiet_engine():
+            result = self._doc.set_page_setup(
+                paper_size=paper, orientation=hw_orient,
+                margins_mm=margins or None,
+            )
+            if columns is not None:
+                first_para = self._first_paragraph_of_section(0)
+                gap = int((column_gap_mm or 8.0) * self._HWPUNIT_PER_MM)
+                self._doc.set_columns(int(columns), same_gap=gap,
+                                      paragraph=first_para)
+                result["columns"] = {"count": int(columns), "gap": gap}
+        return result
+
+    def _first_paragraph_of_section(self, section_index: int):
+        """섹션 첫 문단의 엔진 문단 객체 — colPr 등 섹션급 ctrl 착지점."""
+        sec_el = self._doc._root._sections[section_index].element
+        first_p = next((el for el in sec_el.iter() if el.tag.endswith("}p")), None)
+        if first_p is None:
+            raise ValueError("섹션에 문단이 없습니다.")
+        tree = first_p.getroottree()
+        target_path = tree.getpath(first_p)
+        for para in self._doc.paragraphs:
+            if para.element.getroottree().getpath(para.element) == target_path:
+                return para
+        raise ValueError("섹션 첫 문단 객체를 찾지 못했습니다.")
+
     def section_elements(self) -> list:
         """섹션 lxml 루트 목록 — 구조 검사(읽기 전용) 용."""
         return [s.element for s in self._doc._root._sections]

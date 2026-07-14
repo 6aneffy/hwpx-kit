@@ -54,3 +54,38 @@ def test_bookmark_add_roundtrip(tmp_path):
     out = str(tmp_path / "bm.hwpx")
     run_bookmark_add(FIXTURE, at_text=_anchor_text(), name="결재란", out_path=out)
     assert "결재란" in _section_xml(out)
+
+
+# ── 페이지 설정 ───────────────────────────────────────────────
+
+from hwpx_kit.commands.doc_objects import run_page_setup
+
+
+def test_page_setup_landscape(tmp_path):
+    out = str(tmp_path / "land.hwpx")
+    run_page_setup(FIXTURE, paper="A4", orientation="landscape",
+                   margins=None, columns=None, column_gap_mm=None, out_path=out)
+    xml = _section_xml(out)
+    assert 'landscape="WIDELY"' in xml
+
+
+def test_page_setup_margins(tmp_path):
+    out = str(tmp_path / "margin.hwpx")
+    run_page_setup(FIXTURE, paper=None, orientation=None,
+                   margins={"left": 30.0, "right": 30.0, "top": 20.0, "bottom": 15.0},
+                   columns=None, column_gap_mm=None, out_path=out)
+    ad = HwpxEngineAdapter.open(out)
+    sec = ad.section_elements()[0]
+    margin = next(el for el in sec.iter() if el.tag.endswith("}margin"))
+    assert margin.get("left") == str(round(30.0 * 7200 / 25.4))  # 엔진은 반올림
+
+
+def test_page_setup_columns_lands_in_first_paragraph(tmp_path):
+    out = str(tmp_path / "cols.hwpx")
+    run_page_setup(FIXTURE, paper=None, orientation=None, margins=None,
+                   columns=2, column_gap_mm=8.0, out_path=out)
+    ad = HwpxEngineAdapter.open(out)
+    sec = ad.section_elements()[0]
+    first_p = next(el for el in sec.iter() if el.tag.endswith("}p"))
+    assert any(el.tag.endswith("}colPr") for el in first_p.iter()), \
+        "섹션 전체 다단은 첫 문단에 colPr이 있어야 함"

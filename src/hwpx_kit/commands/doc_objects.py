@@ -28,3 +28,15 @@ def run_bookmark_add(path: str, *, at_text: str, name: str, out_path: str) -> di
     ad.add_bookmark(at_text, name)
     saved = ad.save_copy(out_path)
     return {"out": saved, "name": name}
+
+
+def run_page_setup(path: str, *, paper: str | None, orientation: str | None,
+                   margins: dict[str, float] | None, columns: int | None,
+                   column_gap_mm: float | None, out_path: str) -> dict:
+    if not any([paper, orientation, margins, columns]):
+        raise ValueError("--paper/--orientation/--margins/--columns 중 하나는 지정하세요.")
+    ad = HwpxEngineAdapter.open(path)
+    result = ad.page_setup(paper=paper, orientation=orientation, margins=margins,
+                           columns=columns, column_gap_mm=column_gap_mm)
+    saved = ad.save_copy(out_path)
+    return {"out": saved, "applied": result}
