@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
 from hwpx_kit.inspect_rules import CHECKS as TEXT_CHECKS
-from hwpx_kit.inspect_structure import check_preview, check_structure
+from hwpx_kit.inspect_structure import check_layout, check_preview, check_structure
 
 DOC_CHECKS = {
     "structure": check_structure,
     "preview": check_preview,
+    "layout": check_layout,
 }
 
 DEFAULT_CHECKS = ["residue", "gongmun", "pii", "structure", "preview"]

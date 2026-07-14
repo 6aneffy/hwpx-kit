@@ -152,3 +152,67 @@ def check_preview(ad) -> list[dict]:
         "message": "미리보기(PrvText)가 본문과 다름 — 편집 전 내용 잔존 (탐색기 미리보기로 노출될 수 있음)",
         "context": head[:60],
     }]
+
+
+import unicodedata as _ud
+
+# 넘침 추정 상수 — 10pt 기준 근사 (1pt=100 hwpunit): 전각 폭 ≈1000, 줄높이 ≈1700
+_CHAR_UNIT = 1000
+_LINE_UNIT = 1700
+_CELL_PAD = 1100      # 좌우 여백 합 근사
+# cellSz height는 최소 높이(한글이 자동 확장)라 비율 하나로는 과탐 —
+# 실측(공개 서식 4종): 정상 최악 (8줄, 비율0.5)·(2줄, 비율3.4). 둘 다 넘어야 경고
+_OVERFLOW_MIN_LINES = 4
+_OVERFLOW_RATIO = 3.0
+_MIN_ROW_UNIT = 900   # 이보다 낮은 행높이에 내용이 있으면 잘림 위험
+
+
+def _text_units(s: str) -> int:
+    return sum(_CHAR_UNIT if _ud.east_asian_width(ch) in ("W", "F")
+               else _CHAR_UNIT // 2 for ch in s)
+
+
+def check_layout(ad) -> list[dict]:
+    """셀 넘침·과소 행높이 추정 — 휴리스틱이라 기본 게이트엔 미포함.
+
+    표 품질 저하 1순위 원인(내용 잘림)을 제출 전에 잡기 위한 경고.
+    중첩 표가 든 셀은 추정 불가로 건너뛴다.
+    """
+    issues: list[dict] = []
+    for si, sec in enumerate(ad.section_elements()):
+        for ti, tbl in enumerate(el for el in sec.iter() if el.tag.endswith("}tbl")):
+            for tc in tbl.iter():
+                if not tc.tag.endswith("}tc"):
+                    continue
+                if any(el.tag.endswith("}tbl") for el in tc.iter() if el is not tc):
+                    continue
+                sz = _child(tc, "cellSz")
+                if sz is None:
+                    continue
+                w = int(sz.get("width", "0") or 0)
+                h = int(sz.get("height", "0") or 0)
+                if w <= _CELL_PAD or h <= 0:
+                    continue
+                text = "".join(el.text or "" for el in tc.iter()
+                               if el.tag.endswith("}t"))
+                if not text.strip():
+                    continue
+                addr = _child(tc, "cellAddr")
+                pos = (f"({addr.get('rowAddr')},{addr.get('colAddr')})"
+                       if addr is not None else "?")
+                chars_per_line = max(1, (w - _CELL_PAD) // _CHAR_UNIT)
+                est_lines = -(-_text_units(text) // (_CHAR_UNIT * chars_per_line))
+                if (est_lines >= _OVERFLOW_MIN_LINES
+                        and est_lines * _LINE_UNIT > h * _OVERFLOW_RATIO):
+                    issues.append(_issue(
+                        "cell_overflow_risk",
+                        f"셀 내용이 칸보다 큼 (추정 {est_lines}줄) — 내용 압축 또는 col-width/row-height 조정",
+                        f"section {si} 표 {ti} 셀 {pos}: {text[:20]}…"))
+                elif h < _MIN_ROW_UNIT:
+                    issues.append(_issue(
+                        "row_height_too_small",
+                        "행높이가 글자보다 낮음 — 내용 잘림 위험",
+                        f"section {si} 표 {ti} 셀 {pos}"))
+    for i in issues:
+        i["check"] = "layout"
+    return issues

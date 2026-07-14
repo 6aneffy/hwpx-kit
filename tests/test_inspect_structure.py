@@ -55,3 +55,30 @@ def test_missing_secpr_detected():
         if el.tag.endswith("}secPr"):
             el.getparent().remove(el)
     assert "missing_secpr" in _codes(check_structure(ad))
+
+
+# ── layout: 넘침 추정 ─────────────────────────────────────────
+
+from hwpx_kit.inspect_structure import check_layout
+
+
+def test_layout_clean_on_fixtures():
+    for name in ("seoul-report-brief", "seoul-body", "seoul-attachment",
+                 "seoul-report-cover"):
+        ad = HwpxEngineAdapter.open(f"tests/fixtures/real/{name}.hwpx")
+        overflow = [i for i in check_layout(ad) if i["code"] == "cell_overflow_risk"]
+        assert overflow == [], f"{name} 오탐: {overflow[:2]}"
+
+
+def test_layout_flags_overflowing_cell():
+    ad = HwpxEngineAdapter.open(FIXTURE)
+    sec = ad.section_elements()[0]
+    tc = next(el for el in sec.iter() if el.tag.endswith("}tc"))
+    sz = next(ch for ch in tc if ch.tag.endswith("}cellSz"))
+    sz.set("width", "3000")   # ≈10mm — 좁은 칸
+    sz.set("height", "1000")  # 한 줄도 빠듯
+    t = next((el for el in tc.iter() if el.tag.endswith("}t")), None)
+    assert t is not None
+    t.text = "이 칸에는 도저히 들어갈 수 없는 매우 긴 내용이 들어간다 " * 5
+    issues = check_layout(ad)
+    assert any(i["code"] == "cell_overflow_risk" for i in issues)
