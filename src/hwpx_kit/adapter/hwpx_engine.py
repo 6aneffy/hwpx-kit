@@ -778,6 +778,135 @@ class HwpxEngineAdapter:
             target.add_picture(item_id, width=width, height=height, treat_as_char=True)
         return {"binary_item_id": item_id, "width": width, "height": height}
 
+    def _picture_elements(self) -> list:
+        """본문 pic 요소를 문서 순서로 — 엔진 picture_references와 같은 기준."""
+        pics = []
+        for sec in self.section_elements():
+            pics.extend(el for el in sec.iter() if el.tag.endswith("}pic"))
+        return pics
+
+    def list_pictures(self) -> list[dict]:
+        with quiet_engine():
+            refs = self._doc.picture_references()
+        out = []
+        for ref in refs:
+            w = int(ref.get("width") or 0)
+            h = int(ref.get("height") or 0)
+            out.append({
+                "picture_index": ref["picture_index"],
+                "binary_ref": ref.get("binaryItemIDRef"),
+                "width_mm": round(w / self._HWPUNIT_PER_MM, 1),
+                "height_mm": round(h / self._HWPUNIT_PER_MM, 1),
+            })
+        return out
+
+    def resize_picture(self, index: int, *, width_mm: float | None = None,
+                       height_mm: float | None = None) -> dict:
+        """pic의 표시 크기(sz·curSz)를 갱신 — 위치·배치·원본 픽셀 정보는 유지."""
+        if width_mm is None and height_mm is None:
+            raise ValueError("--width-mm/--height-mm 중 하나는 지정하세요.")
+        with quiet_engine():
+            pics = self._picture_elements()
+            if not 0 <= index < len(pics):
+                raise ValueError(f"이미지 인덱스 범위 밖: {index} (이미지 {len(pics)}개)")
+            pic = pics[index]
+            for suffix in ("sz", "curSz"):
+                node = next((ch for ch in pic if ch.tag.endswith("}" + suffix)), None)
+                if node is None:
+                    continue
+                if width_mm is not None:
+                    node.set("width", str(int(width_mm * self._HWPUNIT_PER_MM)))
+                if height_mm is not None:
+                    node.set("height", str(int(height_mm * self._HWPUNIT_PER_MM)))
+            self._mark_sections_dirty()
+        return {"index": index, "width_mm": width_mm, "height_mm": height_mm}
+
+    def replace_picture_at(self, index: int, image_path: str) -> dict:
+        """이미지 바이너리만 교체 — 크기·위치·배치 기하 보존 (엔진 네이티브)."""
+        import os as _os
+
+        ext = _os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpeg":
+            ext = "jpg"
+        with open(image_path, "rb") as f:
+            data = f.read()
+        with quiet_engine():
+            return self._doc.replace_picture(data, ext, picture_index=index)
+
+    def delete_picture(self, index: int) -> dict:
+        """pic 요소 제거 + 고아가 된 바이너리 정리."""
+        with quiet_engine():
+            refs = {r["picture_index"]: r.get("binaryItemIDRef")
+                    for r in self._doc.picture_references()}
+            pics = self._picture_elements()
+            if not 0 <= index < len(pics):
+                raise ValueError(f"이미지 인덱스 범위 밖: {index} (이미지 {len(pics)}개)")
+            pic = pics[index]
+            parent = pic.getparent()
+            # pic만 든 run이면 run째 제거, 아니면 pic만
+            if parent is not None and parent.tag.endswith("}run") and len(parent) == 1:
+                parent.getparent().remove(parent)
+            elif parent is not None:
+                parent.remove(pic)
+            self._mark_sections_dirty()
+            old_ref = refs.get(index)
+            removed_bin = False
+            if old_ref and old_ref not in {
+                r.get("binaryItemIDRef") for r in self._doc.picture_references()
+            }:
+                removed_bin = bool(self._doc.remove_image(old_ref))
+        return {"index": index, "binary_removed": removed_bin}
+
+    def place_seal(self, image_path: str, *, at_text: str, size_mm: float = 15.0,
+                   dx_mm: float = 0.0, dy_mm: float = 0.0) -> dict:
+        """도장/서명을 앵커 문단 기준 floating으로 겹쳐 배치.
+
+        글자처럼취급이 아니라서 셀·문단 높이를 밀지 않는다 — 발신명의 위
+        날인이 목적. 위치는 문단 기준 오프셋(mm). 조판 계층 변경이므로
+        한글 육안 확인 필수.
+        """
+        import os as _os
+
+        ext = _os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpeg":
+            ext = "jpg"
+        if ext not in ("png", "jpg", "bmp", "gif"):
+            raise ValueError(f"지원하지 않는 이미지 형식: .{ext} (png/jpg/bmp/gif)")
+        with open(image_path, "rb") as f:
+            data = f.read()
+        size = int(size_mm * self._HWPUNIT_PER_MM)
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            item_id = self._doc.add_image(data, ext)
+            if dx_mm < 0 or dy_mm < 0:
+                raise ValueError("오프셋은 0 이상 mm (문단 기준 오른쪽/아래 방향)")
+            para.add_picture(
+                item_id, width=size, height=size, treat_as_char=False,
+                text_wrap="IN_FRONT_OF_TEXT",  # 도장은 글자 위에 겹쳐 보임
+                pos_overrides={
+                    "vertRelTo": "PARA", "horzRelTo": "PARA",
+                    "horzOffset": str(int(dx_mm * self._HWPUNIT_PER_MM)),
+                    "vertOffset": str(int(dy_mm * self._HWPUNIT_PER_MM)),
+                },
+            )
+        return {"binary_item_id": item_id, "size_mm": size_mm}
+
+    def add_shape(self, *, at_text: str, shape: str, width_mm: float,
+                  height_mm: float, fill_color: str | None = None) -> None:
+        """구분선/사각형/타원 — 엔진 네이티브, 글자처럼취급."""
+        w = int(width_mm * self._HWPUNIT_PER_MM)
+        h = int(height_mm * self._HWPUNIT_PER_MM)
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            if shape == "line":
+                self._doc.add_line(0, 0, w, h, paragraph=para)
+            elif shape == "rect":
+                self._doc.add_rectangle(w, h, fill_color=fill_color, paragraph=para)
+            elif shape == "ellipse":
+                self._doc.add_ellipse(w, h, fill_color=fill_color, paragraph=para)
+            else:
+                raise ValueError(f"shape는 line/rect/ellipse 중 하나: {shape}")
+
     def set_header_footer(self, *, header: str | None = None,
                           footer: str | None = None,
                           page_number: str | None = None) -> list[str]:
@@ -1024,6 +1153,71 @@ class HwpxEngineAdapter:
                 raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
             return self._align_cell_paragraphs(tables[table_index].table,
                                                r1, c1, r2, c2, align)
+
+    def add_note(self, at_text: str, text: str, kind: str = "footnote") -> None:
+        """앵커 문단에 각주/미주 추가 — 엔진 네이티브."""
+        if kind not in ("footnote", "endnote"):
+            raise ValueError(f"kind는 footnote/endnote 중 하나: {kind}")
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            if kind == "footnote":
+                self._doc.add_footnote(text, paragraph=para)
+            else:
+                self._doc.add_endnote(text, paragraph=para)
+
+    def add_hyperlink(self, at_text: str, url: str, display: str) -> None:
+        """앵커 문단 끝에 하이퍼링크(fieldBegin+표시문구+fieldEnd) 추가."""
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            self._doc.add_hyperlink(url, display, paragraph=para)
+
+    def add_bookmark(self, at_text: str, name: str) -> None:
+        """앵커 문단에 책갈피 표식 추가."""
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            self._doc.add_bookmark(name, paragraph=para)
+
+    def page_setup(self, *, paper: str | None = None,
+                   orientation: str | None = None,
+                   margins: dict[str, float] | None = None,
+                   columns: int | None = None,
+                   column_gap_mm: float | None = None) -> dict:
+        """용지·방향·여백·다단 — 엔진 set_page_setup 래핑.
+
+        다단은 엔진 기본 경로가 섹션 끝에 새 문단을 만들어 무의미하므로
+        섹션 첫 문단(secPr가 있는 곳)에 colPr을 직접 넣는다.
+        """
+        orient_map = {"portrait": "PORTRAIT", "landscape": "WIDELY"}
+        hw_orient = None
+        if orientation is not None:
+            hw_orient = orient_map.get(orientation.lower())
+            if hw_orient is None:
+                raise ValueError(f"방향은 portrait/landscape 중 하나: {orientation}")
+        with quiet_engine():
+            result = self._doc.set_page_setup(
+                paper_size=paper, orientation=hw_orient,
+                margins_mm=margins or None,
+            )
+            if columns is not None:
+                first_para = self._first_paragraph_of_section(0)
+                gap = int((column_gap_mm or 8.0) * self._HWPUNIT_PER_MM)
+                self._doc.set_columns(int(columns), same_gap=gap,
+                                      paragraph=first_para)
+                result["columns"] = {"count": int(columns), "gap": gap}
+        return result
+
+    def _first_paragraph_of_section(self, section_index: int):
+        """섹션 첫 문단의 엔진 문단 객체 — colPr 등 섹션급 ctrl 착지점."""
+        sec_el = self._doc._root._sections[section_index].element
+        first_p = next((el for el in sec_el.iter() if el.tag.endswith("}p")), None)
+        if first_p is None:
+            raise ValueError("섹션에 문단이 없습니다.")
+        tree = first_p.getroottree()
+        target_path = tree.getpath(first_p)
+        for para in self._doc.paragraphs:
+            if para.element.getroottree().getpath(para.element) == target_path:
+                return para
+        raise ValueError("섹션 첫 문단 객체를 찾지 못했습니다.")
 
     def section_elements(self) -> list:
         """섹션 lxml 루트 목록 — 구조 검사(읽기 전용) 용."""

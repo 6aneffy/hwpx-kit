@@ -236,6 +236,84 @@ def _build_parser() -> argparse.ArgumentParser:
     pts.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     pts.add_argument("--json", action="store_true")
 
+    pna = sub.add_parser("note-add", help="각주/미주 추가 — 앵커 문단 원문 지정")
+    pna.add_argument("file")
+    pna.add_argument("--at-text", required=True, help="각주를 달 문단 원문 (공백 정규화 전체 일치)")
+    pna.add_argument("--text", required=True, help="각주/미주 내용")
+    pna.add_argument("--type", default="footnote", choices=["footnote", "endnote"])
+    pna.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pna.add_argument("--json", action="store_true")
+
+    pla = sub.add_parser("link-add", help="하이퍼링크 추가 — 앵커 문단 끝에 표시문구+URL")
+    pla.add_argument("file")
+    pla.add_argument("--at-text", required=True, help="링크를 붙일 문단 원문")
+    pla.add_argument("--url", required=True)
+    pla.add_argument("--display", required=True, help="표시 문구")
+    pla.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pla.add_argument("--json", action="store_true")
+
+    pbm = sub.add_parser("bookmark-add", help="책갈피 추가 — 앵커 문단에 이름 표식")
+    pbm.add_argument("file")
+    pbm.add_argument("--at-text", required=True, help="책갈피를 둘 문단 원문")
+    pbm.add_argument("--name", required=True, help="책갈피 이름")
+    pbm.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pbm.add_argument("--json", action="store_true")
+
+    pps = sub.add_parser("page-setup", help="용지·방향·여백·다단 설정 (다단은 한글 육안 확인 권장)")
+    pps.add_argument("file")
+    pps.add_argument("--paper", choices=["A4", "A3", "B4", "B5", "LETTER"], help="용지 규격")
+    pps.add_argument("--orientation", choices=["portrait", "landscape"], help="용지 방향")
+    pps.add_argument("--margins", help="여백 mm 'left,right,top,bottom' 4값")
+    pps.add_argument("--columns", type=int, help="다단 수 (섹션 전체)")
+    pps.add_argument("--column-gap-mm", type=float, help="단 간격 mm (기본 8)")
+    pps.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pps.add_argument("--json", action="store_true")
+
+    psl = sub.add_parser("seal", help="도장·서명 겹침 배치 — 발신명의 위 날인 (floating, 한글 육안 확인 필수)")
+    psl.add_argument("file")
+    psl.add_argument("--image", required=True, help="도장 이미지 (png/jpg/bmp/gif)")
+    psl.add_argument("--at-text", required=True, help="기준 문단 원문 (발신명의 줄)")
+    psl.add_argument("--size-mm", type=float, default=15.0, help="도장 크기 mm (기본 15)")
+    psl.add_argument("--dx-mm", type=float, default=0.0, help="문단 기준 가로 오프셋 mm")
+    psl.add_argument("--dy-mm", type=float, default=0.0, help="문단 기준 세로 오프셋 mm")
+    psl.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    psl.add_argument("--json", action="store_true")
+
+    psh = sub.add_parser("shape-add", help="도형 삽입 — 구분선(line)·사각형(rect)·타원(ellipse)")
+    psh.add_argument("file")
+    psh.add_argument("--type", required=True, choices=["line", "rect", "ellipse"])
+    psh.add_argument("--at-text", required=True, help="삽입 위치 문단 원문")
+    psh.add_argument("--width-mm", type=float, required=True)
+    psh.add_argument("--height-mm", type=float, default=0.0)
+    psh.add_argument("--fill", help="채움색 6자리 hex (rect/ellipse)")
+    psh.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    psh.add_argument("--json", action="store_true")
+
+    pil = sub.add_parser("image-list", help="본문 이미지 목록 — 인덱스·크기 (편집 대상 확인)")
+    pil.add_argument("file")
+    pil.add_argument("--json", action="store_true")
+
+    pir = sub.add_parser("image-resize", help="이미지 크기 변경 — 위치·배치 유지")
+    pir.add_argument("file")
+    pir.add_argument("--index", type=int, required=True, help="image-list의 picture_index")
+    pir.add_argument("--width-mm", type=float)
+    pir.add_argument("--height-mm", type=float)
+    pir.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pir.add_argument("--json", action="store_true")
+
+    pip_ = sub.add_parser("image-replace", help="이미지 교체 — 크기·위치·배치 그대로, 그림만 갈아끼움")
+    pip_.add_argument("file")
+    pip_.add_argument("--index", type=int, required=True, help="image-list의 picture_index")
+    pip_.add_argument("--image", required=True, help="새 이미지 파일")
+    pip_.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pip_.add_argument("--json", action="store_true")
+
+    pid = sub.add_parser("image-del", help="이미지 삭제 — 본문 배치와 내장 바이너리까지 정리")
+    pid.add_argument("file")
+    pid.add_argument("--index", type=int, required=True, help="image-list의 picture_index")
+    pid.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pid.add_argument("--json", action="store_true")
+
     pt = sub.add_parser("fmt", help="공문 표기 변환 — 금액 한글화·날짜(요일)·만나이 (파일 불필요)")
     pt.add_argument("--amount", help="금액 (정수, 콤마 허용)")
     pt.add_argument("--style", default="gongmun", choices=["gongmun", "ilgeum"],
@@ -427,6 +505,66 @@ def main(argv: list[str] | None = None) -> int:
                 after_text=args.after_text, like_table=args.like_table,
                 out_path=args.out, after_table=args.after_table,
             )
+        elif args.command == "note-add":
+            from hwpx_kit.commands.doc_objects import run_note_add
+
+            data = run_note_add(args.file, at_text=args.at_text, text=args.text,
+                                kind=args.type, out_path=args.out)
+        elif args.command == "link-add":
+            from hwpx_kit.commands.doc_objects import run_link_add
+
+            data = run_link_add(args.file, at_text=args.at_text, url=args.url,
+                                display=args.display, out_path=args.out)
+        elif args.command == "bookmark-add":
+            from hwpx_kit.commands.doc_objects import run_bookmark_add
+
+            data = run_bookmark_add(args.file, at_text=args.at_text,
+                                    name=args.name, out_path=args.out)
+        elif args.command == "page-setup":
+            from hwpx_kit.commands.doc_objects import run_page_setup
+
+            margins = None
+            if args.margins:
+                vals = [float(v) for v in args.margins.split(",")]
+                if len(vals) != 4:
+                    raise ValueError("--margins는 'left,right,top,bottom' mm 4값")
+                margins = dict(zip(("left", "right", "top", "bottom"), vals))
+            data = run_page_setup(args.file, paper=args.paper,
+                                  orientation=args.orientation, margins=margins,
+                                  columns=args.columns,
+                                  column_gap_mm=args.column_gap_mm,
+                                  out_path=args.out)
+        elif args.command == "seal":
+            from hwpx_kit.commands.doc_objects import run_seal
+
+            data = run_seal(args.file, at_text=args.at_text, image_path=args.image,
+                            size_mm=args.size_mm, dx_mm=args.dx_mm,
+                            dy_mm=args.dy_mm, out_path=args.out)
+        elif args.command == "shape-add":
+            from hwpx_kit.commands.doc_objects import run_shape_add
+
+            data = run_shape_add(args.file, at_text=args.at_text, shape=args.type,
+                                 width_mm=args.width_mm, height_mm=args.height_mm,
+                                 fill_color=args.fill, out_path=args.out)
+        elif args.command == "image-list":
+            from hwpx_kit.commands.image_edit import run_image_list
+
+            data = run_image_list(args.file)
+        elif args.command == "image-resize":
+            from hwpx_kit.commands.image_edit import run_image_resize
+
+            data = run_image_resize(args.file, index=args.index,
+                                    width_mm=args.width_mm,
+                                    height_mm=args.height_mm, out_path=args.out)
+        elif args.command == "image-replace":
+            from hwpx_kit.commands.image_edit import run_image_replace
+
+            data = run_image_replace(args.file, index=args.index,
+                                     image_path=args.image, out_path=args.out)
+        elif args.command == "image-del":
+            from hwpx_kit.commands.image_edit import run_image_del
+
+            data = run_image_del(args.file, index=args.index, out_path=args.out)
         elif args.command == "render":
             data = run_render(args.file, out_path=args.out)
         elif args.command == "generate":
