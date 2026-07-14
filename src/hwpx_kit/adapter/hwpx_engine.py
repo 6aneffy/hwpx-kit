@@ -1169,16 +1169,67 @@ class HwpxEngineAdapter:
             return self._align_cell_paragraphs(tables[table_index].table,
                                                r1, c1, r2, c2, align)
 
+    _HP_NS = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
+
     def add_note(self, at_text: str, text: str, kind: str = "footnote") -> None:
-        """앵커 문단에 각주/미주 추가 — 엔진 네이티브."""
+        """앵커 문단에 각주/미주 추가 — 엔진 네이티브 + 실물 구조 보정.
+
+        엔진 생성물은 ctrl 래핑·number 속성·autoNum(번호 컨트롤)이 빠져
+        한글이 각주를 조용히 무시한다 (실물 대조 2026-07-15). 한글이 직접
+        만든 각주 구조에 맞춰 후처리한다.
+        """
         if kind not in ("footnote", "endnote"):
             raise ValueError(f"kind는 footnote/endnote 중 하나: {kind}")
         with quiet_engine():
             para = self._find_anchor_paragraph(anchor_text=at_text)
             if kind == "footnote":
-                self._doc.add_footnote(text, paragraph=para)
+                note = self._doc.add_footnote(text, paragraph=para)
             else:
-                self._doc.add_endnote(text, paragraph=para)
+                note = self._doc.add_endnote(text, paragraph=para)
+            self._fix_note_element(note.element, kind)
+            self._mark_sections_dirty()
+
+    def _fix_note_element(self, note_el, kind: str) -> None:
+        suffix = "footNote" if kind == "footnote" else "endNote"
+        num_type = "FOOTNOTE" if kind == "footnote" else "ENDNOTE"
+        # 같은 종류 주석의 문서 순서 번호 (이번 것 포함) — 한글은 열 때 재계산하지만
+        # 파일에도 올바른 값을 둔다
+        order = 1
+        for sec in self.section_elements():
+            for el in sec.iter():
+                if el.tag.endswith("}" + suffix):
+                    if el is note_el:
+                        break
+                    order += 1
+            else:
+                continue
+            break
+        note_el.set("number", str(order))
+        note_el.set("suffixChar", "41")  # ')'
+
+        # ctrl 래핑 (엔진은 run 바로 아래에 둠)
+        parent = note_el.getparent()
+        if parent is not None and not parent.tag.endswith("}ctrl"):
+            ctrl = parent.makeelement(self._HP_NS + "ctrl", {})
+            note_el.addprevious(ctrl)
+            parent.remove(note_el)
+            ctrl.append(note_el)
+
+        # 주석 문단 첫 런 맨 앞에 autoNum 번호 컨트롤
+        first_run = next((el for el in note_el.iter()
+                          if el.tag.endswith("}run")), None)
+        if first_run is None:
+            return
+        auto_ctrl = first_run.makeelement(self._HP_NS + "ctrl", {})
+        auto_num = auto_ctrl.makeelement(self._HP_NS + "autoNum", {
+            "num": str(order), "numType": num_type,
+        })
+        auto_num.append(auto_num.makeelement(self._HP_NS + "autoNumFormat", {
+            "type": "DIGIT", "userChar": "", "prefixChar": "",
+            "suffixChar": ")", "supscript": "0",
+        }))
+        auto_ctrl.append(auto_num)
+        first_run.insert(0, auto_ctrl)
 
     def add_hyperlink(self, at_text: str, url: str, display: str) -> None:
         """앵커 문단 끝에 하이퍼링크(fieldBegin+표시문구+fieldEnd) 추가."""

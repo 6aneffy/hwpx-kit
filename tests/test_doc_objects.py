@@ -24,7 +24,7 @@ def test_note_add_footnote_roundtrip(tmp_path):
                           text="각주 내용입니다", kind="footnote", out_path=out)
     assert result["kind"] == "footnote"
     xml = _section_xml(out)
-    assert "footNote" in xml
+    assert "<hp:footNote" in xml
     assert "각주 내용입니다" in xml
 
 
@@ -33,7 +33,27 @@ def test_note_add_endnote_roundtrip(tmp_path):
     run_note_add(FIXTURE, at_text=_anchor_text(),
                  text="미주 내용", kind="endnote", out_path=out)
     xml = _section_xml(out)
-    assert "endNote" in xml
+    assert "<hp:endNote" in xml
+
+
+def test_note_add_footnote_renders_like_hangul(tmp_path):
+    """한글 실물 각주 구조 (실물 대조 2026-07-15): ctrl 래핑 + number 속성 +
+    각주 문단 안 autoNum 번호 컨트롤. 셋 중 하나라도 없으면 한글이 각주를
+    조용히 무시해 마커·하단 각주가 안 보인다."""
+    import re
+
+    out = str(tmp_path / "note-render.hwpx")
+    run_note_add(FIXTURE, at_text=_anchor_text(),
+                 text="렌더 검증 각주", kind="footnote", out_path=out)
+    xml = _section_xml(out)
+    note = re.search(r"<hp:footNote .*?</hp:footNote>", xml, re.S)
+    assert note is not None, "footNote 요소 없음 (footNotePr 말고 실제 각주)"
+    body = note.group(0)
+    assert 'number="1"' in body
+    assert 'numType="FOOTNOTE"' in body and "<hp:autoNum" in body
+    # ctrl 래핑: footNote 여는 태그 직전이 <hp:ctrl>
+    i = xml.find("<hp:footNote ")
+    assert xml[max(0, i - 9):i] == "<hp:ctrl>"
 
 
 # ── 하이퍼링크·책갈피 ─────────────────────────────────────────
