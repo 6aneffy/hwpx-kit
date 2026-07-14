@@ -68,5 +68,8 @@ hwpx-kit image-del 문서.hwpx --index 0 --out 결과.hwpx                      
 
 ## 검증 공통
 
-편집 후 `validate` → `inspect` (구조·미리보기 잔존 포함). floating 개체(seal)·
-다단은 반드시 한글에서 열어 육안 확인을 안내할 것.
+편집 후 `validate` → `inspect` (구조·미리보기 잔존 포함) →
+**Windows + 한글 환경이면 `open-check`** (한글 실구동 열림 확인 — 개체 조작
+후 필수 권장, exit 2면 산출물 폐기하고 원인 보고). floating 개체(seal)·
+다단·각주의 **위치/모양**은 최종적으로 한글 육안 확인을 안내할 것 —
+open-check는 열림만 보증하고 배치 품질은 못 본다.
