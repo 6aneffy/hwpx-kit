@@ -1025,6 +1025,29 @@ class HwpxEngineAdapter:
             return self._align_cell_paragraphs(tables[table_index].table,
                                                r1, c1, r2, c2, align)
 
+    def add_note(self, at_text: str, text: str, kind: str = "footnote") -> None:
+        """앵커 문단에 각주/미주 추가 — 엔진 네이티브."""
+        if kind not in ("footnote", "endnote"):
+            raise ValueError(f"kind는 footnote/endnote 중 하나: {kind}")
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            if kind == "footnote":
+                self._doc.add_footnote(text, paragraph=para)
+            else:
+                self._doc.add_endnote(text, paragraph=para)
+
+    def add_hyperlink(self, at_text: str, url: str, display: str) -> None:
+        """앵커 문단 끝에 하이퍼링크(fieldBegin+표시문구+fieldEnd) 추가."""
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            self._doc.add_hyperlink(url, display, paragraph=para)
+
+    def add_bookmark(self, at_text: str, name: str) -> None:
+        """앵커 문단에 책갈피 표식 추가."""
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            self._doc.add_bookmark(name, paragraph=para)
+
     def section_elements(self) -> list:
         """섹션 lxml 루트 목록 — 구조 검사(읽기 전용) 용."""
         return [s.element for s in self._doc._root._sections]
