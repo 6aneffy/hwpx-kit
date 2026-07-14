@@ -101,9 +101,9 @@ def _build_parser() -> argparse.ArgumentParser:
     pfb.add_argument("--name", required=True, help='파일명 패턴, 예: "{성명}_위촉장.hwpx" (충돌 시 _2 접미)')
     pfb.add_argument("--json", action="store_true")
 
-    pin = sub.add_parser("inspect", help="제출 전 기계 검수 — 잔여물({{마커}}·○○○)·공문 표기(날짜·시각)·개인정보. 위반 시 종료코드 2")
+    pin = sub.add_parser("inspect", help="제출 전 기계 검수 — 잔여물·공문 표기·개인정보·구조(유령 셀 등)·미리보기 잔존. 위반 시 종료코드 2")
     pin.add_argument("file")
-    pin.add_argument("--checks", help="쉼표 구분: residue,gongmun,pii (생략 시 전부)")
+    pin.add_argument("--checks", help="쉼표 구분: residue,gongmun,pii,structure,preview,layout (생략 시 layout 제외 전부)")
     pin.add_argument("--json", action="store_true")
 
     pim = sub.add_parser("image-add", help="이미지(사진·직인) 삽입 — 문단 앵커 또는 표 셀에 글자처럼취급")
