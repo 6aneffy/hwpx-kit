@@ -968,10 +968,51 @@ class HwpxEngineAdapter:
         """header.xml lxml 루트 — 참조 무결성 검사용."""
         return self._doc._root._headers[0].element
 
+    _PRV_PART = "Preview/PrvText.txt"
+    _PRV_MAX_CHARS = 1000  # 한글 미리보기 관례 분량
+
+    def preview_text(self) -> str | None:
+        """PrvText 판독 시도 — 인코딩 불명이면 None (판단 불가는 침묵)."""
+        pkg = self._doc.package
+        if not pkg.has_part(self._PRV_PART):
+            return None
+        raw = pkg.get_part(self._PRV_PART)
+        if not raw:
+            return ""
+        for enc in ("utf-16", "utf-16-le", "utf-16-be"):
+            try:
+                text = raw.decode(enc)
+            except UnicodeDecodeError:
+                continue
+            # 한글/ASCII 비중으로 오판독 걸러내기 (엉뚱한 엔디안은 한자 잡음이 됨)
+            sample = text[:200]
+            if not sample:
+                return ""
+            ok = sum(1 for ch in sample
+                     if ch.isascii() or "가" <= ch <= "힣" or ch in "·—…")
+            if ok / len(sample) >= 0.7:
+                return text
+        return None
+
+    def refresh_preview_text(self) -> bool:
+        """미리보기 텍스트를 현재 본문으로 재생성 (BOM+UTF-16LE).
+
+        엔진 저장은 PrvText를 원본 바이트 그대로 두므로(실험 2026-07-14)
+        편집 전 내용이 미리보기에 잔존한다 — 탐색기 미리보기·PII 잔여물 벡터.
+        """
+        pkg = self._doc.package
+        if not pkg.has_part(self._PRV_PART):
+            return False
+        body = self.export_text()
+        payload = "﻿" + body[: self._PRV_MAX_CHARS]
+        pkg.set_part(self._PRV_PART, payload.encode("utf-16-le"))
+        return True
+
     def save_copy(self, out_path: str) -> str:
         out_abs = os.path.abspath(out_path)
         if out_abs == self._source_path:
             raise ValueError("원본 파일에 덮어쓸 수 없습니다. 다른 출력 경로를 지정하세요.")
         with quiet_engine():
+            self.refresh_preview_text()
             self._doc.save_to_path(out_abs)
         return out_abs

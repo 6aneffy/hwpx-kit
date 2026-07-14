@@ -122,3 +122,33 @@ def check_structure(ad) -> list[dict]:
     issues += _check_dangling_refs(sections, header)
     issues += _check_secpr(sections)
     return issues
+
+
+import re as _re
+
+
+def _norm_ws(s: str) -> str:
+    return _re.sub(r"\s+", " ", s).strip()
+
+
+def check_preview(ad) -> list[dict]:
+    """미리보기 텍스트가 본문과 다르면 잔여물로 판정.
+
+    편집·삭제 이전 내용이 PrvText에 살아남는 패턴 — 판독 불가(인코딩 불명)는
+    오탐 방지를 위해 침묵한다.
+    """
+    prv = ad.preview_text()
+    if not prv:
+        return []
+    head = _norm_ws(prv.lstrip("﻿"))[:120]
+    if len(head) < 10:
+        return []
+    body = _norm_ws(ad.export_text())
+    if head in body:
+        return []
+    return [{
+        "check": "preview",
+        "code": "preview_stale",
+        "message": "미리보기(PrvText)가 본문과 다름 — 편집 전 내용 잔존 (탐색기 미리보기로 노출될 수 있음)",
+        "context": head[:60],
+    }]
