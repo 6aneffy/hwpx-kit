@@ -89,3 +89,37 @@ def test_page_setup_columns_lands_in_first_paragraph(tmp_path):
     first_p = next(el for el in sec.iter() if el.tag.endswith("}p"))
     assert any(el.tag.endswith("}colPr") for el in first_p.iter()), \
         "섹션 전체 다단은 첫 문단에 colPr이 있어야 함"
+
+
+# ── 도장·도형 ─────────────────────────────────────────────────
+
+from hwpx_kit.commands.doc_objects import run_seal, run_shape_add
+
+_DOT_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d49444154789c62600100000005000157bfabd40000000049454e44ae426082")
+
+
+def test_seal_places_floating_picture(tmp_path):
+    png = tmp_path / "seal.png"
+    png.write_bytes(_DOT_PNG)
+    out = str(tmp_path / "sealed.hwpx")
+    run_seal(FIXTURE, at_text=_anchor_text(), image_path=str(png),
+             size_mm=15.0, dx_mm=25.0, dy_mm=0.0, out_path=out)
+    xml = _section_xml(out)
+    assert 'treatAsChar="0"' in xml
+    assert "IN_FRONT_OF_TEXT" in xml
+
+
+def test_shape_add_line(tmp_path):
+    out = str(tmp_path / "line.hwpx")
+    run_shape_add(FIXTURE, at_text=_anchor_text(), shape="line",
+                  width_mm=150.0, height_mm=0.0, fill_color=None, out_path=out)
+    assert "line" in _section_xml(out).lower()
+
+
+def test_shape_add_rect_with_fill(tmp_path):
+    out = str(tmp_path / "rect.hwpx")
+    run_shape_add(FIXTURE, at_text=_anchor_text(), shape="rect",
+                  width_mm=50.0, height_mm=20.0, fill_color="#FFE9A9", out_path=out)
+    assert "FFE9A9" in _section_xml(out)

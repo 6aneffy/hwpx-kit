@@ -878,10 +878,12 @@ class HwpxEngineAdapter:
         with quiet_engine():
             para = self._find_anchor_paragraph(anchor_text=at_text)
             item_id = self._doc.add_image(data, ext)
+            if dx_mm < 0 or dy_mm < 0:
+                raise ValueError("오프셋은 0 이상 mm (문단 기준 오른쪽/아래 방향)")
             para.add_picture(
                 item_id, width=size, height=size, treat_as_char=False,
+                text_wrap="IN_FRONT_OF_TEXT",  # 도장은 글자 위에 겹쳐 보임
                 pos_overrides={
-                    "treatAsChar": "0",
                     "vertRelTo": "PARA", "horzRelTo": "PARA",
                     "horzOffset": str(int(dx_mm * self._HWPUNIT_PER_MM)),
                     "vertOffset": str(int(dy_mm * self._HWPUNIT_PER_MM)),

@@ -40,3 +40,22 @@ def run_page_setup(path: str, *, paper: str | None, orientation: str | None,
                            columns=columns, column_gap_mm=column_gap_mm)
     saved = ad.save_copy(out_path)
     return {"out": saved, "applied": result}
+
+
+def run_seal(path: str, *, at_text: str, image_path: str, size_mm: float,
+             dx_mm: float, dy_mm: float, out_path: str) -> dict:
+    ad = HwpxEngineAdapter.open(path)
+    result = ad.place_seal(image_path, at_text=at_text, size_mm=size_mm,
+                           dx_mm=dx_mm, dy_mm=dy_mm)
+    saved = ad.save_copy(out_path)
+    return {"out": saved, **result,
+            "note": "floating 배치 — 한글에서 위치 육안 확인 필요"}
+
+
+def run_shape_add(path: str, *, at_text: str, shape: str, width_mm: float,
+                  height_mm: float, fill_color: str | None, out_path: str) -> dict:
+    ad = HwpxEngineAdapter.open(path)
+    ad.add_shape(at_text=at_text, shape=shape, width_mm=width_mm,
+                 height_mm=height_mm, fill_color=fill_color)
+    saved = ad.save_copy(out_path)
+    return {"out": saved, "shape": shape}
