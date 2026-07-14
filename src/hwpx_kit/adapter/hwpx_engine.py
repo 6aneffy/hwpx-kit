@@ -960,6 +960,14 @@ class HwpxEngineAdapter:
             return self._align_cell_paragraphs(tables[table_index].table,
                                                r1, c1, r2, c2, align)
 
+    def section_elements(self) -> list:
+        """섹션 lxml 루트 목록 — 구조 검사(읽기 전용) 용."""
+        return [s.element for s in self._doc._root._sections]
+
+    def header_element(self):
+        """header.xml lxml 루트 — 참조 무결성 검사용."""
+        return self._doc._root._headers[0].element
+
     def save_copy(self, out_path: str) -> str:
         out_abs = os.path.abspath(out_path)
         if out_abs == self._source_path:
