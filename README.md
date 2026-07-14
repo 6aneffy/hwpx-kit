@@ -150,6 +150,7 @@ hwpx-kit image-add 문서.hwpx --image 도장.png --at-text "(인)" --width-mm 2
 hwpx-kit image-list 문서.hwpx --json                                    # 본문 이미지 목록 (편집 대상 확인)
 hwpx-kit image-replace 문서.hwpx --index 0 --image 새로고.png --out 결과.hwpx  # 이미지 교체 (크기·위치 유지, resize/del도)
 hwpx-kit seal 문서.hwpx --image 도장.png --at-text "행정안전부장관" --dx-mm 25 --out 결과.hwpx  # 발신명의 위 날인 (겹침)
+hwpx-kit toc-add 문서.hwpx --at-text "앵커 문단" --out 결과.hwpx        # 목차 삽입 — 쪽번호는 한글 COM 실측 (후보 확인은 toc)
 hwpx-kit note-add 문서.hwpx --at-text "앵커 문단" --text "각주 내용" --out 결과.hwpx  # 각주/미주
 hwpx-kit link-add 문서.hwpx --at-text "앵커 문단" --url "https://..." --display "안내" --out 결과.hwpx  # 하이퍼링크 (책갈피는 bookmark-add)
 hwpx-kit shape-add 문서.hwpx --type line --at-text "앵커 문단" --width-mm 150 --out 결과.hwpx  # 구분선·도형
@@ -191,7 +192,7 @@ hwpx-kit render 문서.hwpx --out p.svg        # SVG 미리보기 (kordoc)
 ## 아키텍처
 
 ```
-Claude Code 스킬 6종 ──→  hwpx-kit CLI (40 명령, JSON 봉투)
+Claude Code 스킬 6종 ──→  hwpx-kit CLI (42 명령, JSON 봉투)
                               └─ adapter/  ← 엔진 격리 계층
                                   ├─ python-hwpx    hwpx 분석·채우기·표 조작
                                   ├─ pypdf·python-docx·openpyxl   타 포맷 읽기
