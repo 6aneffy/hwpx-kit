@@ -126,7 +126,8 @@ hwpx-kit validate 문서.hwpx --json           # 구조 검증
 # 채우기·편집 (원본 불변 — 항상 --out 사본)
 hwpx-kit fill 양식.hwpx --data 값.json --out 결과.hwpx
 hwpx-kit fill-batch 양식.hwpx --rows 명단.xlsx --template 값틀.json --out-dir 결과/ --name "{성명}_위촉장.hwpx"  # 메일머지
-hwpx-kit inspect 결과.hwpx --json            # 제출 전 검수 — 잔여 마커·공문 표기·개인정보
+hwpx-kit inspect 결과.hwpx --json            # 제출 전 검수 — 잔여 마커·공문 표기·개인정보·문서 구조·미리보기 잔존
+hwpx-kit inspect 결과.hwpx --checks layout --json  # 셀 넘침(내용 잘림 위험) 추정 경고
 hwpx-kit table-set 문서.hwpx --table 3 --data 셀.json --out 결과.hwpx   # 좌표 셀 쓰기
 hwpx-kit table-clear 문서.hwpx --table 3 --rows 1-20 --out 결과.hwpx    # 셀 내용 비우기
 hwpx-kit table-copy 문서.hwpx --table 1 --after-table 4 --out 결과.hwpx # 표 통째 복제 (서식·병합 유지)
@@ -164,6 +165,7 @@ hwpx-kit render 문서.hwpx --out p.svg        # SVG 미리보기 (kordoc)
 | `table:<라벨>#N` | 같은 라벨 N번째 | `"table:담당 부서#2": "운영과"` |
 | `table:<라벨> > <방향>` | 방향 체인 | `"table:과 장 > right > right": "010-…"` |
 | `text:<원문>` | 문장 교체 (서식 보존) | `"text:○○○ 사업": "청년 AI교육 사업"` |
+| `fit:<자리원문>` | 폭 보존 교체 — 서명란 등 자리 폭이 레이아웃인 곳 | `"fit:성명:        (인)": "성명: 김철수 (인)"` |
 | `delete:<문단원문>` | 안내문 삭제 | `"delete:(예시입니다)": ""` |
 | `bold:` / `underline:<원문>` | 굵게·밑줄 | `"bold:핵심 성과": ""` |
 

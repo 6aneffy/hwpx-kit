@@ -117,3 +117,39 @@ def test_cli_inspect_exit_codes(dirty_doc, clean_doc, capsys):
     code = main(["inspect", clean_doc, "--json"])
     env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0 and env["data"]["clean"] is True
+
+
+# ── gongmun 확장 규칙 (0.8.0) ────────────────────────────────
+
+from hwpx_kit.inspect_rules import check_gongmun_text
+
+
+def _codes(issues):
+    return {i["code"] for i in issues}
+
+
+def test_gongmun_zero_padded_date():
+    assert "date_zero_pad" in _codes(check_gongmun_text("시행일: 2026. 07. 01."))
+
+
+def test_gongmun_missing_trailing_dot():
+    assert "date_no_trailing_dot" in _codes(check_gongmun_text("기한: 2026. 7. 14 까지"))
+
+
+def test_gongmun_hour_minute_style():
+    assert "time_hour_minute" in _codes(check_gongmun_text("회의는 14시 30분에 시작"))
+    assert "time_hour_minute" not in _codes(check_gongmun_text("소요 3시간 30분"))
+
+
+def test_gongmun_tilde_kkaji_duplicate():
+    assert "period_kkaji" in _codes(check_gongmun_text("2026. 1. 1. ~ 12. 31.까지"))
+
+
+def test_gongmun_geum_spacing():
+    assert "amount_geum_spacing" in _codes(check_gongmun_text("계약금액: 금 13,000,000원"))
+    assert "amount_geum_spacing" not in _codes(check_gongmun_text("금13,000,000원"))
+
+
+def test_gongmun_clean_text_passes():
+    ok = "일시: 2026. 7. 14.(화) 15:00 / 금액: 금1,000원 / 기간: 1. 1. ~ 12. 31."
+    assert check_gongmun_text(ok) == []

@@ -44,6 +44,24 @@ def check_residue_text(text: str) -> list[dict]:
 _DATE_BAD = re.compile(r"\b(19|20)\d{2}\s*[-/]\s*\d{1,2}\s*[-/]\s*\d{1,2}\b")
 # 시각: 공문은 24시각제 '15:00' — '오전/오후 N시(N분)'는 위반
 _TIME_BAD = re.compile(r"(오전|오후)\s*\d{1,2}\s*시(\s*\d{1,2}\s*분)?")
+# 날짜 0패딩: '2026. 07. 01.' — 월·일에 0을 붙이지 않음
+_DATE_ZERO_PAD = re.compile(r"\b(19|20)\d{2}\.\s*0\d\.|\.\s*0\d\.(?!\d)")
+# 날짜 끝 마침표 누락: '2026. 7. 14' — '일' 뒤에도 마침표를 찍음
+_DATE_NO_DOT = re.compile(r"\b(19|20)\d{2}\.\s*\d{1,2}\.\s*\d{1,2}(?![.\d])")
+# 시각 'N시 N분' — 24시각제 쌍점(HH:MM)으로. '3시간 30분'은 제외
+_TIME_SI_BUN = re.compile(r"(?<![가-힣\d])\d{1,2}시(?!간)\s*\d{1,2}\s*분")
+# 물결표 기간에 '까지' 중복: '~ 12. 31.까지'
+_PERIOD_KKAJI = re.compile(r"~[^~\n]{0,24}?까지")
+# 금액 '금' 뒤 띄어쓰기: '금 13,000원' — 붙여 씀
+_GEUM_SPACING = re.compile(r"금\s+\d[\d,]*\s*원")
+
+_GONGMUN_EXTRA: list[tuple[str, str, re.Pattern]] = [
+    ("date_zero_pad", "공문 날짜의 월·일에 0을 붙이지 않음 — '2026. 7. 1.' 형식", _DATE_ZERO_PAD),
+    ("date_no_trailing_dot", "공문 날짜는 '일' 뒤에도 마침표 — '2026. 7. 14.' 형식", _DATE_NO_DOT),
+    ("time_hour_minute", "공문 시각은 24시각제 쌍점 — '14시 30분'이 아니라 '14:30'", _TIME_SI_BUN),
+    ("period_kkaji", "물결표(~) 기간 표기에 '까지'를 겹쳐 쓰지 않음", _PERIOD_KKAJI),
+    ("amount_geum_spacing", "금액은 '금' 뒤에 붙여 씀 — '금13,000,000원'", _GEUM_SPACING),
+]
 
 
 def check_gongmun_text(text: str) -> list[dict]:
@@ -56,6 +74,9 @@ def check_gongmun_text(text: str) -> list[dict]:
         issues.append(_issue("gongmun", "time_style",
                              "공문 시각은 24시각제 '15:00' — 오전/오후 표기 위반",
                              text, m))
+    for code, message, pattern in _GONGMUN_EXTRA:
+        for m in pattern.finditer(text):
+            issues.append(_issue("gongmun", code, message, text, m))
     return issues
 
 
