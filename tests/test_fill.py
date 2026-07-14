@@ -246,3 +246,46 @@ def test_bold_key_works_in_table_cells(label_table_doc, tmp_path):
 
     result = run_fill(label_table_doc, {"bold:성명": ""}, str(tmp_path / "o.hwpx"))
     assert result["unmatched"] == []
+
+
+# ── secure fill 카나리 — 값 비노출 보증 (0.8.0) ─────────────
+
+
+def test_secure_fill_never_leaks_values_in_output(tmp_path, capsys):
+    """--secure 산출 JSON·stdout 어디에도 채운 값이 나타나면 안 된다 (카나리)."""
+    import json as _json
+
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+    from hwpx_kit.cli import main as _main
+
+    canary = "카나리860107비밀값"
+    ad = HwpxEngineAdapter.open("tests/fixtures/real/seoul-report-brief.hwpx")
+    target = next((p.text or "").strip() for p in ad._iter_all_paragraphs()
+                  if len((p.text or "").strip()) >= 6)
+    data_file = tmp_path / "secure.json"
+    data_file.write_text(_json.dumps({f"text:{target}": canary}), encoding="utf-8")
+
+    out = tmp_path / "secure-out.hwpx"
+    code = _main(["fill", "tests/fixtures/real/seoul-report-brief.hwpx",
+                  "--data", str(data_file), "--out", str(out), "--secure", "--json"])
+    stdout = capsys.readouterr().out
+    assert code == 0
+    assert canary not in stdout
+
+
+def test_secure_fill_failure_leaves_no_output_and_no_values(tmp_path, capsys):
+    import json as _json
+
+    from hwpx_kit.cli import main as _main
+
+    canary = "유출되면안되는값9화7"
+    data_file = tmp_path / "secure.json"
+    data_file.write_text(_json.dumps({"text:존재하지않는문구뷁뷁": canary}),
+                         encoding="utf-8")
+    out = tmp_path / "no-out.hwpx"
+    code = _main(["fill", "tests/fixtures/real/seoul-report-brief.hwpx",
+                  "--data", str(data_file), "--out", str(out), "--secure", "--json"])
+    stdout = capsys.readouterr().out
+    assert code == 1
+    assert not out.exists()
+    assert canary not in stdout
