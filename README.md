@@ -100,7 +100,7 @@ irm https://raw.githubusercontent.com/6aneffy/hwpx-kit/main/install.ps1 | iex
 
 | 스킬 | 트리거 | 역할 |
 |------|--------|------|
-| **hwpx-form** | "이 양식에 채워줘" | 분석→채우기→검증 코어 워크플로. 일괄 생성(메일머지)·표 조작·이미지·secure 채우기 포함 |
+| **hwpx-form** | "이 양식에 채워줘" | 분석→채우기→검증 코어 워크플로. 일괄 생성(메일머지)·표 조작·이미지 편집·각주/링크·페이지 설정·도장 날인·secure 채우기 포함 |
 | **doc-create** | "기획서 만들어줘" (파일 없이) | 백지 생성 라우터 — 내장 템플릿(표지·장 헤더·표 골격) 기반 |
 | **format-convert** | "금액 한글로", "요일 붙여줘" | 금액 병기·날짜 요일·만나이 — 결정론 계산 (LLM 암산 금지) |
 | **gongmun-format** | "공문 형식으로", "검토해줘" | 행안부 공문 규약 — 글머리 위계(□○-※\*), 표기, 제출 전 기계 검수 |
@@ -141,7 +141,14 @@ hwpx-kit cell-color 문서.hwpx --table 3 --range "0,0:0,5" --color "#D9E5FF" --
 hwpx-kit col-width 문서.hwpx --table 3 --widths "2,3,3,2" --out 결과.hwpx     # 열 너비 비율
 hwpx-kit cell-align 문서.hwpx --table 3 --range "0,0:9,5" --align center --out 결과.hwpx  # 셀 정렬
 hwpx-kit page-break 문서.hwpx --table 5 --out 결과.hwpx                 # 쪽나눔 (새 장 시작)
+hwpx-kit page-setup 문서.hwpx --orientation landscape --margins "20,20,15,15" --out 결과.hwpx  # 용지·방향·여백·다단
 hwpx-kit image-add 문서.hwpx --image 도장.png --at-text "(인)" --width-mm 20 --out 결과.hwpx  # 직인·사진
+hwpx-kit image-list 문서.hwpx --json                                    # 본문 이미지 목록 (편집 대상 확인)
+hwpx-kit image-replace 문서.hwpx --index 0 --image 새로고.png --out 결과.hwpx  # 이미지 교체 (크기·위치 유지, resize/del도)
+hwpx-kit seal 문서.hwpx --image 도장.png --at-text "행정안전부장관" --dx-mm 25 --out 결과.hwpx  # 발신명의 위 날인 (겹침)
+hwpx-kit note-add 문서.hwpx --at-text "앵커 문단" --text "각주 내용" --out 결과.hwpx  # 각주/미주
+hwpx-kit link-add 문서.hwpx --at-text "앵커 문단" --url "https://..." --display "안내" --out 결과.hwpx  # 하이퍼링크 (책갈피는 bookmark-add)
+hwpx-kit shape-add 문서.hwpx --type line --at-text "앵커 문단" --width-mm 150 --out 결과.hwpx  # 구분선·도형
 hwpx-kit header-footer 문서.hwpx --footer "대외비" --page-number center --out 결과.hwpx
 
 # 변환·생성
@@ -180,7 +187,7 @@ hwpx-kit render 문서.hwpx --out p.svg        # SVG 미리보기 (kordoc)
 ## 아키텍처
 
 ```
-Claude Code 스킬 6종 ──→  hwpx-kit CLI (29 명령, JSON 봉투)
+Claude Code 스킬 6종 ──→  hwpx-kit CLI (39 명령, JSON 봉투)
                               └─ adapter/  ← 엔진 격리 계층
                                   ├─ python-hwpx    hwpx 분석·채우기·표 조작
                                   ├─ pypdf·python-docx·openpyxl   타 포맷 읽기
