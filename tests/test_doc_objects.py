@@ -24,7 +24,7 @@ def test_note_add_footnote_roundtrip(tmp_path):
                           text="각주 내용입니다", kind="footnote", out_path=out)
     assert result["kind"] == "footnote"
     xml = _section_xml(out)
-    assert "footNote" in xml
+    assert "<hp:footNote" in xml
     assert "각주 내용입니다" in xml
 
 
@@ -33,7 +33,27 @@ def test_note_add_endnote_roundtrip(tmp_path):
     run_note_add(FIXTURE, at_text=_anchor_text(),
                  text="미주 내용", kind="endnote", out_path=out)
     xml = _section_xml(out)
-    assert "endNote" in xml
+    assert "<hp:endNote" in xml
+
+
+def test_note_add_footnote_renders_like_hangul(tmp_path):
+    """한글 실물 각주 구조 (실물 대조 2026-07-15): ctrl 래핑 + number 속성 +
+    각주 문단 안 autoNum 번호 컨트롤. 셋 중 하나라도 없으면 한글이 각주를
+    조용히 무시해 마커·하단 각주가 안 보인다."""
+    import re
+
+    out = str(tmp_path / "note-render.hwpx")
+    run_note_add(FIXTURE, at_text=_anchor_text(),
+                 text="렌더 검증 각주", kind="footnote", out_path=out)
+    xml = _section_xml(out)
+    note = re.search(r"<hp:footNote .*?</hp:footNote>", xml, re.S)
+    assert note is not None, "footNote 요소 없음 (footNotePr 말고 실제 각주)"
+    body = note.group(0)
+    assert 'number="1"' in body
+    assert 'numType="FOOTNOTE"' in body and "<hp:autoNum" in body
+    # ctrl 래핑: footNote 여는 태그 직전이 <hp:ctrl>
+    i = xml.find("<hp:footNote ")
+    assert xml[max(0, i - 9):i] == "<hp:ctrl>"
 
 
 # ── 하이퍼링크·책갈피 ─────────────────────────────────────────
@@ -123,3 +143,38 @@ def test_shape_add_rect_with_fill(tmp_path):
     run_shape_add(FIXTURE, at_text=_anchor_text(), shape="rect",
                   width_mm=50.0, height_mm=20.0, fill_color="#FFE9A9", out_path=out)
     assert "FFE9A9" in _section_xml(out)
+
+
+# ── 한글 호환 회귀 (실증 2026-07-15: 아래 패턴이면 한글이 파일 거부) ──
+
+
+def test_shape_line_geometry_uses_core_namespace(tmp_path):
+    """선 기하점(startPt/endPt)은 hc: 네임스페이스여야 한글이 연다."""
+    out = str(tmp_path / "line-ns.hwpx")
+    run_shape_add(FIXTURE, at_text=_anchor_text(), shape="line",
+                  width_mm=150.0, height_mm=0.0, fill_color=None, out_path=out)
+    xml = _section_xml(out)
+    assert "<hp:startPt" not in xml
+    assert "<hc:startPt" in xml
+    assert "<hp:endPt" not in xml
+
+
+def test_shape_rect_geometry_uses_core_namespace(tmp_path):
+    """사각형 꼭짓점(pt0~pt3)도 hc: — hp:면 한글 거부."""
+    out = str(tmp_path / "rect-ns.hwpx")
+    run_shape_add(FIXTURE, at_text=_anchor_text(), shape="rect",
+                  width_mm=50.0, height_mm=15.0, fill_color=None, out_path=out)
+    xml = _section_xml(out)
+    assert "<hp:pt0" not in xml
+    assert "<hc:pt0" in xml
+
+
+def test_columns_modifies_existing_colpr_no_duplicate(tmp_path):
+    """다단은 기존 colPr 수정 — 중복 colPr + sameSz="true"는 한글 거부."""
+    out = str(tmp_path / "cols-single.hwpx")
+    run_page_setup(FIXTURE, paper=None, orientation=None, margins=None,
+                   columns=2, column_gap_mm=8.0, out_path=out)
+    xml = _section_xml(out)
+    assert xml.count("<hp:colPr") == 1, "colPr는 섹션에 하나만"
+    assert 'sameSz="true"' not in xml
+    assert 'colCount="2"' in xml

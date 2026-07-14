@@ -314,6 +314,10 @@ def _build_parser() -> argparse.ArgumentParser:
     pid.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     pid.add_argument("--json", action="store_true")
 
+    poc = sub.add_parser("open-check", help="한글 실열림 확인 — 정적 검사가 못 잡는 스키마 거부 탐지 (Windows + 한글 필요, 실패 시 종료코드 2)")
+    poc.add_argument("file")
+    poc.add_argument("--json", action="store_true")
+
     pt = sub.add_parser("fmt", help="공문 표기 변환 — 금액 한글화·날짜(요일)·만나이 (파일 불필요)")
     pt.add_argument("--amount", help="금액 (정수, 콤마 허용)")
     pt.add_argument("--style", default="gongmun", choices=["gongmun", "ilgeum"],
@@ -505,6 +509,12 @@ def main(argv: list[str] | None = None) -> int:
                 after_text=args.after_text, like_table=args.like_table,
                 out_path=args.out, after_table=args.after_table,
             )
+        elif args.command == "open-check":
+            from hwpx_kit.commands.open_check import run_open_check
+
+            data = run_open_check(args.file)
+            if not data["opens"]:
+                exit_code = 2
         elif args.command == "note-add":
             from hwpx_kit.commands.doc_objects import run_note_add
 
