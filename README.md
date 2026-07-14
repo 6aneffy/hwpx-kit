@@ -2,9 +2,12 @@
 
 # hwpx-kit
 
-**한글(HWPX) 문서 자동화 — Claude Code 플러그인 & CLI**
+**한글(HWP/HWPX) 문서 자동화 — Claude Code 플러그인 & CLI**
 
 *"이 양식에 채워줘" 한마디로, 서식 무손상 한글 문서가 나옵니다.*
+
+양식 채우기 · 메일머지 · 표 생성/조작 · 공문서 표기 검수 · 각주/도장/이미지 —
+아래아한글(한컴오피스) 설치 없이 동작하는 AI 에이전트용 HWPX 자동화 도구
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/hwpx-kit-cli.svg)](https://pypi.org/project/hwpx-kit-cli/)
