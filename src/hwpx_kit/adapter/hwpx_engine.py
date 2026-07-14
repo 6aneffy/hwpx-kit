@@ -157,6 +157,71 @@ class HwpxEngineAdapter:
                     count += 1
         return count
 
+    def replace_text_across_runs(self, search: str, value: str) -> int:
+        """런 경계에 걸쳐 쪼개진 문구 교체 — 매치 밖 런 서식 보존.
+
+        엔진 런 교체(단일 런 내부)와 문단 전체 교체(서식 병합) 사이의 중간 폴백.
+        첫 관여 런에 접두+값을, 마지막 관여 런에 접미를 남기고 중간 런은 비운다.
+        값 서식은 첫 관여 런을 따른다. 문단당 첫 출현 1회 교체.
+        """
+        count = 0
+        with quiet_engine():
+            for para in self._iter_all_paragraphs():
+                runs = list(para.runs)
+                texts = [r.text or "" for r in runs]
+                joined = "".join(texts)
+                start = joined.find(search)
+                if start < 0:
+                    continue
+                end = start + len(search)
+                spans = []
+                pos = 0
+                for t in texts:
+                    spans.append((pos, pos + len(t)))
+                    pos += len(t)
+                involved = [i for i, (a, b) in enumerate(spans)
+                            if a < end and b > start and texts[i]]
+                if not involved:
+                    continue
+                first, last = involved[0], involved[-1]
+                prefix = texts[first][: start - spans[first][0]]
+                suffix = texts[last][end - spans[last][0]:]
+                if first == last:
+                    runs[first].text = prefix + value + suffix
+                else:
+                    runs[first].text = prefix + value
+                    for i in involved[1:-1]:
+                        runs[i].text = ""
+                    runs[last].text = suffix
+                count += 1
+        return count
+
+    @staticmethod
+    def _display_width(s: str) -> int:
+        """표시 폭 근사 — 전각(한글·한자) 2, 반각 1."""
+        import unicodedata
+
+        return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+                   for ch in s)
+
+    def replace_text_fit(self, search: str, value: str) -> tuple[int, str | None]:
+        """자리 원문을 값으로 교체하되 표시 폭을 공백으로 보존.
+
+        '성명:      (인)' 류 서명란에서 값 길이 차이로 뒤 요소가 밀리는 것을
+        방지한다. 값이 자리보다 넓으면 교체하지 않고 사유를 반환 (넘침 방지).
+        """
+        slot = self._display_width(search)
+        width = self._display_width(value)
+        if width > slot:
+            return 0, f"값 폭({width})이 자리 폭({slot}) 초과 — 자리 원문을 더 넓게 지정하세요"
+        padded = value + " " * (slot - width)
+        count = self.replace_text(search, padded)
+        if count == 0:
+            count = self.replace_text_across_runs(search, padded)
+        if count == 0:
+            return 0, "문서에서 해당 문구를 찾지 못함"
+        return count, None
+
     def fill_by_label(self, label_path: str, value: str) -> dict:
         with quiet_engine():
             return self._doc.fill_by_path({label_path: value})

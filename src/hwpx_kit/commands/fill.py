@@ -40,15 +40,25 @@ def _apply_one(ad: HwpxEngineAdapter, fill_key: str, value: str) -> str | None:
     if fill_key.startswith("marker:"):
         key = fill_key[len("marker:"):]
         count = ad.replace_marker(key, value)
+        if count == 0:
+            # 마커가 런 경계로 쪼개진 경우 ({{와 키가 다른 런)
+            count = ad.replace_text_across_runs("{{" + key + "}}", value)
         return None if count > 0 else "문서에서 마커를 찾지 못함"
 
     if fill_key.startswith("text:"):
         search = fill_key[len("text:"):]
         count = ad.replace_text(search, value)
         if count == 0:
-            # 런이 쪼개진 긴 문장 — 문단 전체 일치로 폴백
+            # 런 경계에 걸친 문구 — 매치 밖 서식은 보존
+            count = ad.replace_text_across_runs(search, value)
+        if count == 0:
+            # 최후 폴백: 문단 전체 일치 (문단이 첫 런 서식으로 합쳐짐)
             count = ad.replace_paragraph_text(search, value)
         return None if count > 0 else "문서에서 해당 문구를 찾지 못함"
+
+    if fill_key.startswith("fit:"):
+        count, reason = ad.replace_text_fit(fill_key[len("fit:"):], value)
+        return None if count > 0 else reason
 
     if fill_key.startswith("delete:"):
         search = fill_key[len("delete:"):]
@@ -74,7 +84,7 @@ def _apply_one(ad: HwpxEngineAdapter, fill_key: str, value: str) -> str | None:
             reason = f"{reason} — 같은 라벨이 여러 곳. analyze의 table:라벨#N 키로 지정"
         return f"표 채우기 실패: {reason}"
 
-    return "알 수 없는 fill_key 형식 (clickhere:/marker:/table:/text:/delete:/bold:/underline: 중 하나여야 함)"
+    return "알 수 없는 fill_key 형식 (clickhere:/marker:/table:/text:/fit:/delete:/bold:/underline: 중 하나여야 함)"
 
 
 def run_fill_secure(path: str, data: dict[str, str], out_path: str) -> dict:
