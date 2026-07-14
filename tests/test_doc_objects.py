@@ -178,3 +178,36 @@ def test_columns_modifies_existing_colpr_no_duplicate(tmp_path):
     assert xml.count("<hp:colPr") == 1, "colPr는 섹션에 하나만"
     assert 'sameSz="true"' not in xml
     assert 'colCount="2"' in xml
+
+
+def test_note_paragraph_uses_document_note_style(tmp_path):
+    """각주 문단은 문서의 '각주' 스타일(작은 글씨)을 물려받아야 한다 —
+    기본 글자모양이면 본문 크기(15pt급)로 나와 각주처럼 안 보인다 (실캡처)."""
+    import re
+    import zipfile
+
+    out = str(tmp_path / "note-style.hwpx")
+    run_note_add(FIXTURE, at_text=_anchor_text(),
+                 text="스타일 검증 각주", kind="footnote", out_path=out)
+
+    header = zipfile.ZipFile(out).read("Contents/header.xml").decode("utf-8")
+    style = next(m for m in re.finditer(
+        r'<hh:style id="(\d+)" [^>]*name="([^"]*각주[^"]*)"[^>]*'
+        r'paraPrIDRef="(\d+)" charPrIDRef="(\d+)"', header))
+    style_id, _, para_ref, char_ref = style.groups()
+
+    xml = _section_xml(out)
+    note = re.search(r"<hp:footNote .*?</hp:footNote>", xml, re.S).group(0)
+    p = re.search(r"<hp:p [^>]*>", note).group(0)
+    assert f'styleIDRef="{style_id}"' in p
+    assert f'paraPrIDRef="{para_ref}"' in p
+    assert f'charPrIDRef="{char_ref}"' in note
+
+
+def test_page_setup_columns_warns_on_wide_tables(tmp_path):
+    """단 폭보다 넓은 표가 있으면 겹침 경고 — 표 문서에 다단은 부적합 (실캡처)."""
+    out = str(tmp_path / "cols-warn.hwpx")
+    result = run_page_setup(FIXTURE, paper=None, orientation=None, margins=None,
+                            columns=2, column_gap_mm=8.0, out_path=out)
+    warns = result.get("warnings") or []
+    assert any("표" in w for w in warns), f"넓은 표 경고 없음: {warns}"

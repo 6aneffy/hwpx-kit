@@ -1207,6 +1207,21 @@ class HwpxEngineAdapter:
         note_el.set("number", str(order))
         note_el.set("suffixChar", "41")  # ')'
 
+        # 문서의 각주/미주 스타일 참조 — 없으면 본문 크기로 나와 각주처럼 안 보임
+        refs = self._note_style_refs(kind)
+        if refs:
+            p_el = next((el for el in note_el.iter() if el.tag.endswith("}p")),
+                        None)
+            if p_el is not None:
+                if refs.get("styleIDRef"):
+                    p_el.set("styleIDRef", refs["styleIDRef"])
+                if refs.get("paraPrIDRef"):
+                    p_el.set("paraPrIDRef", refs["paraPrIDRef"])
+                if refs.get("charPrIDRef"):
+                    for run_el in p_el:
+                        if run_el.tag.endswith("}run"):
+                            run_el.set("charPrIDRef", refs["charPrIDRef"])
+
         # ctrl 래핑 (엔진은 run 바로 아래에 둠)
         parent = note_el.getparent()
         if parent is not None and not parent.tag.endswith("}ctrl"):
@@ -1268,7 +1283,57 @@ class HwpxEngineAdapter:
                 gap = int((column_gap_mm or 8.0) * self._HWPUNIT_PER_MM)
                 self._set_section_columns(int(columns), gap)
                 result["columns"] = {"count": int(columns), "gap": gap}
+                warns = self._column_overflow_warnings(int(columns), gap)
+                if warns:
+                    result["warnings"] = warns
         return result
+
+    def _column_overflow_warnings(self, count: int, gap: int) -> list[str]:
+        """단 폭보다 넓은 표 개수 경고 — 표 문서에 다단을 걸면 겹침 (실캡처 실증)."""
+        if count < 2:
+            return []
+        sec_el = self._doc._root._sections[0].element
+        page_pr = next((el for el in sec_el.iter() if el.tag.endswith("}pagePr")),
+                       None)
+        if page_pr is None:
+            return []
+        margin = next((ch for ch in page_pr if ch.tag.endswith("}margin")), None)
+        width = int(page_pr.get("width", "0") or 0)
+        left = int(margin.get("left", "0") or 0) if margin is not None else 0
+        right = int(margin.get("right", "0") or 0) if margin is not None else 0
+        usable = width - left - right
+        if usable <= 0:
+            return []
+        col_w = (usable - gap * (count - 1)) / count
+        wide = 0
+        for tbl in sec_el.iter():
+            if not tbl.tag.endswith("}tbl"):
+                continue
+            sz = next((ch for ch in tbl if ch.tag.endswith("}sz")), None)
+            if sz is not None and int(sz.get("width", "0") or 0) > col_w:
+                wide += 1
+        if not wide:
+            return []
+        return [f"단 폭({int(col_w)}hwpunit)보다 넓은 표 {wide}개 — 겹침/밀림 위험. "
+                "표가 든 문서에는 다단이 부적합합니다 (텍스트 위주 문서용)."]
+
+    def _note_style_refs(self, kind: str) -> dict | None:
+        """header 스타일에서 각주/미주 스타일 참조 조회 (이름 매칭).
+
+        한글 문서에는 관례상 '각주'가 든 스타일이 있다 (예: '각주내용(신명조9)').
+        미주는 '미주' 스타일 우선, 없으면 각주 스타일 공용. 둘 다 없으면 None.
+        """
+        header = self.header_element()
+        keys = ("미주", "각주") if kind == "endnote" else ("각주",)
+        for key in keys:
+            for st in header.iter():
+                if st.tag.endswith("}style") and key in (st.get("name") or ""):
+                    return {
+                        "styleIDRef": st.get("id"),
+                        "paraPrIDRef": st.get("paraPrIDRef"),
+                        "charPrIDRef": st.get("charPrIDRef"),
+                    }
+        return None
 
     def _set_section_columns(self, count: int, gap: int) -> None:
         """섹션의 기존 colPr 속성을 수정해 다단 설정.

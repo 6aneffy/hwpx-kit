@@ -39,7 +39,10 @@ def run_page_setup(path: str, *, paper: str | None, orientation: str | None,
     result = ad.page_setup(paper=paper, orientation=orientation, margins=margins,
                            columns=columns, column_gap_mm=column_gap_mm)
     saved = ad.save_copy(out_path)
-    return {"out": saved, "applied": result}
+    out = {"out": saved, "applied": result}
+    if result.get("warnings"):
+        out["warnings"] = result.pop("warnings")
+    return out
 
 
 def run_seal(path: str, *, at_text: str, image_path: str, size_mm: float,

@@ -28,7 +28,10 @@ hwpx-kit page-setup 문서.hwpx --paper A4 --margins "20,20,15,15" --out 결과.
 hwpx-kit page-setup 문서.hwpx --columns 2 --column-gap-mm 8 --out 결과.hwpx
 ```
 - 가로 전환 시 기존 표 폭은 자동으로 안 늘어난다 — col-width로 재조정 필요할 수 있음
-- 🔴 **다단(columns)은 조판 계층 변경 — 한글 육안 확인 필수** (validate 통과 ≠ 렌더 정상)
+- 🔴 **다단은 텍스트 위주 문서 전용** — 표가 든 문서에 걸면 표 폭 > 단 폭이라
+  겹침으로 무너진다 (실캡처 실증). 명령이 단 폭보다 넓은 표를 감지하면
+  warnings로 알려주는데, 그 경고가 나오면 사용자에게 보여주고 진행 여부 확인.
+  한글 육안 확인 필수 (validate 통과 ≠ 렌더 정상)
 
 ## 도장·서명 날인 — "도장 찍어줘" (겹침 배치)
 
@@ -49,8 +52,13 @@ hwpx-kit seal 문서.hwpx --image 도장.png --at-text "행정안전부장관" -
 hwpx-kit shape-add 문서.hwpx --type line --at-text "<문단 원문>" --width-mm 150 --out 결과.hwpx      # 공문 결문 구분선
 hwpx-kit shape-add 문서.hwpx --type rect --at-text "<문단 원문>" --width-mm 50 --height-mm 20 --fill "#FFE9A9" --out 결과.hwpx
 ```
-글자처럼취급으로 앵커 문단에 들어간다. 색 상자 안 텍스트가 필요하면
-도형 대신 1x1 표(cell-color)가 더 다루기 쉽다.
+글자처럼취급으로 앵커 문단에 **인라인**으로 들어간다 — 그래서 앵커는
+**내용 없는 빈 줄용 문단**이어야 자연스럽다 (제목·본문 문단에 넣으면 글자
+옆에 붙어 이상해 보임, 실캡처 실증). 빈 문단이 없으면 임시 앵커 패턴
+(`text:`로 고유 문구 심기 → 도형 삽입 → 되돌리기)을 쓸 것.
+색 상자 안 텍스트가 필요하면 도형 대신 1x1 표(cell-color)가 더 다루기 쉽다.
+rect/ellipse는 실무 수요가 확인되기 전까지 굳이 권하지 말 것 — 구분선(line)이
+주 용도다.
 
 ## 기존 이미지 편집 — "로고 바꿔줘", "사진 키워줘", "이미지 지워줘"
 
