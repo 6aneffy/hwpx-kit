@@ -778,6 +778,133 @@ class HwpxEngineAdapter:
             target.add_picture(item_id, width=width, height=height, treat_as_char=True)
         return {"binary_item_id": item_id, "width": width, "height": height}
 
+    def _picture_elements(self) -> list:
+        """본문 pic 요소를 문서 순서로 — 엔진 picture_references와 같은 기준."""
+        pics = []
+        for sec in self.section_elements():
+            pics.extend(el for el in sec.iter() if el.tag.endswith("}pic"))
+        return pics
+
+    def list_pictures(self) -> list[dict]:
+        with quiet_engine():
+            refs = self._doc.picture_references()
+        out = []
+        for ref in refs:
+            w = int(ref.get("width") or 0)
+            h = int(ref.get("height") or 0)
+            out.append({
+                "picture_index": ref["picture_index"],
+                "binary_ref": ref.get("binaryItemIDRef"),
+                "width_mm": round(w / self._HWPUNIT_PER_MM, 1),
+                "height_mm": round(h / self._HWPUNIT_PER_MM, 1),
+            })
+        return out
+
+    def resize_picture(self, index: int, *, width_mm: float | None = None,
+                       height_mm: float | None = None) -> dict:
+        """pic의 표시 크기(sz·curSz)를 갱신 — 위치·배치·원본 픽셀 정보는 유지."""
+        if width_mm is None and height_mm is None:
+            raise ValueError("--width-mm/--height-mm 중 하나는 지정하세요.")
+        with quiet_engine():
+            pics = self._picture_elements()
+            if not 0 <= index < len(pics):
+                raise ValueError(f"이미지 인덱스 범위 밖: {index} (이미지 {len(pics)}개)")
+            pic = pics[index]
+            for suffix in ("sz", "curSz"):
+                node = next((ch for ch in pic if ch.tag.endswith("}" + suffix)), None)
+                if node is None:
+                    continue
+                if width_mm is not None:
+                    node.set("width", str(int(width_mm * self._HWPUNIT_PER_MM)))
+                if height_mm is not None:
+                    node.set("height", str(int(height_mm * self._HWPUNIT_PER_MM)))
+            self._mark_sections_dirty()
+        return {"index": index, "width_mm": width_mm, "height_mm": height_mm}
+
+    def replace_picture_at(self, index: int, image_path: str) -> dict:
+        """이미지 바이너리만 교체 — 크기·위치·배치 기하 보존 (엔진 네이티브)."""
+        import os as _os
+
+        ext = _os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpeg":
+            ext = "jpg"
+        with open(image_path, "rb") as f:
+            data = f.read()
+        with quiet_engine():
+            return self._doc.replace_picture(data, ext, picture_index=index)
+
+    def delete_picture(self, index: int) -> dict:
+        """pic 요소 제거 + 고아가 된 바이너리 정리."""
+        with quiet_engine():
+            refs = {r["picture_index"]: r.get("binaryItemIDRef")
+                    for r in self._doc.picture_references()}
+            pics = self._picture_elements()
+            if not 0 <= index < len(pics):
+                raise ValueError(f"이미지 인덱스 범위 밖: {index} (이미지 {len(pics)}개)")
+            pic = pics[index]
+            parent = pic.getparent()
+            # pic만 든 run이면 run째 제거, 아니면 pic만
+            if parent is not None and parent.tag.endswith("}run") and len(parent) == 1:
+                parent.getparent().remove(parent)
+            elif parent is not None:
+                parent.remove(pic)
+            self._mark_sections_dirty()
+            old_ref = refs.get(index)
+            removed_bin = False
+            if old_ref and old_ref not in {
+                r.get("binaryItemIDRef") for r in self._doc.picture_references()
+            }:
+                removed_bin = bool(self._doc.remove_image(old_ref))
+        return {"index": index, "binary_removed": removed_bin}
+
+    def place_seal(self, image_path: str, *, at_text: str, size_mm: float = 15.0,
+                   dx_mm: float = 0.0, dy_mm: float = 0.0) -> dict:
+        """도장/서명을 앵커 문단 기준 floating으로 겹쳐 배치.
+
+        글자처럼취급이 아니라서 셀·문단 높이를 밀지 않는다 — 발신명의 위
+        날인이 목적. 위치는 문단 기준 오프셋(mm). 조판 계층 변경이므로
+        한글 육안 확인 필수.
+        """
+        import os as _os
+
+        ext = _os.path.splitext(image_path)[1].lower().lstrip(".")
+        if ext == "jpeg":
+            ext = "jpg"
+        if ext not in ("png", "jpg", "bmp", "gif"):
+            raise ValueError(f"지원하지 않는 이미지 형식: .{ext} (png/jpg/bmp/gif)")
+        with open(image_path, "rb") as f:
+            data = f.read()
+        size = int(size_mm * self._HWPUNIT_PER_MM)
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            item_id = self._doc.add_image(data, ext)
+            para.add_picture(
+                item_id, width=size, height=size, treat_as_char=False,
+                pos_overrides={
+                    "treatAsChar": "0",
+                    "vertRelTo": "PARA", "horzRelTo": "PARA",
+                    "horzOffset": str(int(dx_mm * self._HWPUNIT_PER_MM)),
+                    "vertOffset": str(int(dy_mm * self._HWPUNIT_PER_MM)),
+                },
+            )
+        return {"binary_item_id": item_id, "size_mm": size_mm}
+
+    def add_shape(self, *, at_text: str, shape: str, width_mm: float,
+                  height_mm: float, fill_color: str | None = None) -> None:
+        """구분선/사각형/타원 — 엔진 네이티브, 글자처럼취급."""
+        w = int(width_mm * self._HWPUNIT_PER_MM)
+        h = int(height_mm * self._HWPUNIT_PER_MM)
+        with quiet_engine():
+            para = self._find_anchor_paragraph(anchor_text=at_text)
+            if shape == "line":
+                self._doc.add_line(0, 0, w, h, paragraph=para)
+            elif shape == "rect":
+                self._doc.add_rectangle(w, h, fill_color=fill_color, paragraph=para)
+            elif shape == "ellipse":
+                self._doc.add_ellipse(w, h, fill_color=fill_color, paragraph=para)
+            else:
+                raise ValueError(f"shape는 line/rect/ellipse 중 하나: {shape}")
+
     def set_header_footer(self, *, header: str | None = None,
                           footer: str | None = None,
                           page_number: str | None = None) -> list[str]:
