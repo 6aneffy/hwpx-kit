@@ -314,6 +314,20 @@ def _build_parser() -> argparse.ArgumentParser:
     pid.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     pid.add_argument("--json", action="store_true")
 
+    ptc = sub.add_parser("toc", help="목차 후보 나열 (읽기 전용) — 장 헤더 표·장 패턴 문단 탐지")
+    ptc.add_argument("file")
+    ptc.add_argument("--json", action="store_true")
+
+    pta = sub.add_parser("toc-add", help="목차 블록 삽입 — 쪽번호는 한글 COM으로 실측 (Windows + 한글이면 자동)")
+    pta.add_argument("file")
+    pta.add_argument("--at-text", required=True, help="목차가 들어갈 위치의 문단 원문 (그 뒤에 삽입)")
+    pta.add_argument("--title", default="목 차", help='목차 제목 (기본 "목 차")')
+    pta.add_argument("--pages", default="auto", choices=["auto", "com", "none"],
+                     help="쪽번호: auto=한글 있으면 실측(기본) / com=필수 / none=제목만")
+    pta.add_argument("--width", type=int, default=64, help="줄 표시 폭(반각 단위, 기본 64) — 점선 길이 계산용")
+    pta.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pta.add_argument("--json", action="store_true")
+
     poc = sub.add_parser("open-check", help="한글 실열림 확인 — 정적 검사가 못 잡는 스키마 거부 탐지 (Windows + 한글 필요, 실패 시 종료코드 2)")
     poc.add_argument("file")
     poc.add_argument("--json", action="store_true")
@@ -509,6 +523,16 @@ def main(argv: list[str] | None = None) -> int:
                 after_text=args.after_text, like_table=args.like_table,
                 out_path=args.out, after_table=args.after_table,
             )
+        elif args.command == "toc":
+            from hwpx_kit.commands.toc import run_toc
+
+            data = run_toc(args.file)
+        elif args.command == "toc-add":
+            from hwpx_kit.commands.toc import run_toc_add
+
+            data = run_toc_add(args.file, at_text=args.at_text, out_path=args.out,
+                               title=args.title, pages=args.pages,
+                               width=args.width)
         elif args.command == "open-check":
             from hwpx_kit.commands.open_check import run_open_check
 

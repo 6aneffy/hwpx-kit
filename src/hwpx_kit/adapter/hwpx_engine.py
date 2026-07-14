@@ -1317,6 +1317,101 @@ class HwpxEngineAdapter:
         return [f"단 폭({int(col_w)}hwpunit)보다 넓은 표 {wide}개 — 겹침/밀림 위험. "
                 "표가 든 문서에는 다단이 부적합합니다 (텍스트 위주 문서용)."]
 
+    _ROMAN_CHAPTER_RE = None  # 지연 컴파일 (아래 toc_entries)
+
+    def toc_entries(self) -> list[dict]:
+        """목차 후보 — 장 헤더 표(1행, 번호셀+제목셀) + 본문 장 패턴 문단.
+
+        display: 목차 표시 문구('1. 추진배경 및 목적'),
+        search: 쪽번호 조회용 원문(제목 셀 텍스트 — 번호와 셀이 분리돼 있어서).
+        숫자 'N.' 본문 패턴은 목록 항목 오탐이 많아 제외 (장 헤더 표가 커버).
+        """
+        import re as _re
+
+        entries: list[dict] = []
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            num_pat = _re.compile(r"^(제?\s*(?:\d{1,3}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+))\s*[.장]?\s*$")
+            for tref in tn._collect_document_tables(self._doc):
+                table = tref.table
+                if table.row_count != 1 or not 2 <= table.column_count <= 4:
+                    continue
+                texts = []
+                for c in range(table.column_count):
+                    try:
+                        texts.append(tn._cell_text(table, 0, c).strip())
+                    except Exception:
+                        texts.append("")
+                nums = [t for t in texts if t and num_pat.match(t)]
+                titles = [t for t in texts
+                          if t and not num_pat.match(t) and len(t) <= 40]
+                if not titles:
+                    continue
+                title = max(titles, key=len)
+                # 번호 셀이 없으면 제목만 (번호를 지어내지 않는다)
+                display = (f"{nums[0].rstrip('.')}. {title}" if nums else title)
+                entries.append({
+                    "display": display,
+                    "search": title,
+                    "kind": "chapter_table",
+                    "table_index": tref.table_index,
+                })
+            roman = _re.compile(r"^([ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+\.|제\s*\d+\s*장)\s*\S")
+            for para in self._doc.paragraphs:
+                text = (para.text or "").strip()
+                if text and len(text) <= 50 and roman.match(text):
+                    entries.append({"display": text, "search": text,
+                                    "kind": "pattern"})
+        return entries
+
+    def insert_toc(self, at_text: str, lines: list[str],
+                   title: str = "목 차") -> int:
+        """앵커 문단 뒤에 목차 블록 삽입 — 제목(가운데·볼드) + 항목 문단들.
+
+        문단은 앵커의 paraPr/charPr를 물려받아 문서 서식과 어울리게.
+        삽입 문단 수 반환.
+        """
+        with quiet_engine():
+            target = self._find_anchor_paragraph(anchor_text=at_text)
+            base = target.element
+            header = self._doc._root._headers[0]
+            center_id = str(header.ensure_paragraph_alignment("CENTER"))
+
+            char_ref = "0"
+            for el in base.iter():
+                if el.tag.endswith("}run") and el.get("charPrIDRef"):
+                    char_ref = el.get("charPrIDRef")
+                    break
+
+            def _new_p(text: str, para_pr: str | None = None):
+                p = base.makeelement(self._HP_NS + "p", {
+                    "id": "0",
+                    "paraPrIDRef": para_pr or base.get("paraPrIDRef", "0"),
+                    "styleIDRef": base.get("styleIDRef", "0"),
+                    "pageBreak": "0", "columnBreak": "0", "merged": "0",
+                })
+                run = p.makeelement(self._HP_NS + "run",
+                                    {"charPrIDRef": char_ref})
+                t = run.makeelement(self._HP_NS + "t", {})
+                t.text = text
+                run.append(t)
+                p.append(run)
+                return p
+
+            anchor_el = base
+            title_p = _new_p(title, para_pr=center_id)
+            anchor_el.addnext(title_p)
+            anchor_el = title_p
+            for line in lines:
+                p = _new_p(line)
+                anchor_el.addnext(p)
+                anchor_el = p
+            self._mark_sections_dirty()
+        # 제목 볼드 — 기존 런 서식 기계 재사용 (문서 전체에서 title 원문 매칭)
+        self.apply_run_format(title, bold=True)
+        return len(lines) + 1
+
     def _note_style_refs(self, kind: str) -> dict | None:
         """header 스타일에서 각주/미주 스타일 참조 조회 (이름 매칭).
 
