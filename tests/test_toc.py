@@ -125,3 +125,39 @@ def test_toc_add_own_page_sets_page_break(tmp_path):
     title_p = re.search(r'<hp:p ([^>]*)>(?:(?!</hp:p>).)*목 차', xml)
     assert title_p is not None
     assert 'pageBreak="1"' in title_p.group(1)
+
+
+def test_toc_own_page_breaks_after_block_too(tmp_path):
+    """own_page면 목차 뒤 원래 내용도 새 쪽에서 — 표지 잔여물이 목차 쪽으로
+    흘러드는 것 방지 (실캡처: 주최주관이 목차 페이지에 박힘)."""
+    import re
+
+    # 템플릿 표지 끝("2026. 00.") 뒤 첫 내용 문단은 {{주최주관}} —
+    # 사이 빈 여백 문단들은 건너뛰고 그 문단에 쪽나눔이 걸려야 한다
+    out = str(tmp_path / "toc-break-after.hwpx")
+    run_toc_add(TEMPLATE, at_text="2026. 00.", out_path=out,
+                title="목 차", pages="none", width=64, own_page=True)
+    xml = _section_xml(out)
+    fp = re.search(r'<hp:p ([^>]*)>(?:(?!</hp:p>).)*\{\{주최주관\}\}', xml, re.S)
+    assert fp is not None
+    # 엔진 모델 직렬화는 "true"로 씀 (page-break 명령과 동일 경로)
+    assert re.search(r'pageBreak="(1|true)"', fp.group(1)), \
+        "목차 뒤 첫 내용 문단에 쪽나눔 없음"
+
+
+def test_toc_entries_use_body_font_not_anchor_font(tmp_path):
+    """항목 글자는 바탕글 서식 — 앵커(표지 제목 등)의 크고 굵은 글자를
+    물려받으면 목차 같지 않다 (실캡처)."""
+    import re
+
+    out = str(tmp_path / "toc-font.hwpx")
+    run_toc_add(TEMPLATE, at_text=_anchor_text(), out_path=out,
+                title="목 차", pages="none", width=64)
+    header_xml = zipfile.ZipFile(out).read("Contents/header.xml").decode("utf-8")
+    style0 = re.search(r'<hh:style id="0"[^>]*charPrIDRef="(\d+)"', header_xml)
+    assert style0 is not None
+    body_char = style0.group(1)
+    xml = _section_xml(out)
+    entry_p = re.search(r'<hp:p [^>]*>((?:(?!</hp:p>).)*추진배경 및 목적(?:(?!</hp:p>).)*)</hp:p>', xml)
+    assert entry_p is not None
+    assert f'charPrIDRef="{body_char}"' in entry_p.group(1)
