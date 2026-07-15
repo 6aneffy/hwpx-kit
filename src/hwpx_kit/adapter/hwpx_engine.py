@@ -1366,10 +1366,12 @@ class HwpxEngineAdapter:
         return entries
 
     def insert_toc(self, at_text: str, lines: list[str],
-                   title: str = "목 차") -> int:
-        """앵커 문단 뒤에 목차 블록 삽입 — 제목(가운데·볼드) + 항목 문단들.
+                   title: str = "목 차", own_page: bool = False) -> int:
+        """앵커 문단 뒤에 목차 블록 삽입 — 제목(가운데·볼드) + 항목(왼쪽 정렬).
 
-        문단은 앵커의 paraPr/charPr를 물려받아 문서 서식과 어울리게.
+        항목 정렬은 왼쪽 강제 — 앵커 paraPr를 물려받으면 표지(가운데 정렬)
+        뒤에 넣을 때 계단 모양이 된다 (실캡처 실증 2026-07-15). 글자모양은
+        앵커에서 승계. own_page면 제목에 쪽나눔 — 목차가 새 쪽에서 시작.
         삽입 문단 수 반환.
         """
         with quiet_engine():
@@ -1377,6 +1379,7 @@ class HwpxEngineAdapter:
             base = target.element
             header = self._doc._root._headers[0]
             center_id = str(header.ensure_paragraph_alignment("CENTER"))
+            left_id = str(header.ensure_paragraph_alignment("LEFT"))
 
             char_ref = "0"
             for el in base.iter():
@@ -1384,12 +1387,13 @@ class HwpxEngineAdapter:
                     char_ref = el.get("charPrIDRef")
                     break
 
-            def _new_p(text: str, para_pr: str | None = None):
+            def _new_p(text: str, para_pr: str, page_break: bool = False):
                 p = base.makeelement(self._HP_NS + "p", {
                     "id": "0",
-                    "paraPrIDRef": para_pr or base.get("paraPrIDRef", "0"),
+                    "paraPrIDRef": para_pr,
                     "styleIDRef": base.get("styleIDRef", "0"),
-                    "pageBreak": "0", "columnBreak": "0", "merged": "0",
+                    "pageBreak": "1" if page_break else "0",
+                    "columnBreak": "0", "merged": "0",
                 })
                 run = p.makeelement(self._HP_NS + "run",
                                     {"charPrIDRef": char_ref})
@@ -1400,17 +1404,20 @@ class HwpxEngineAdapter:
                 return p
 
             anchor_el = base
-            title_p = _new_p(title, para_pr=center_id)
+            title_p = _new_p(title, center_id, page_break=own_page)
             anchor_el.addnext(title_p)
             anchor_el = title_p
+            spacer = _new_p("", left_id)  # 제목과 항목 사이 여백 줄
+            anchor_el.addnext(spacer)
+            anchor_el = spacer
             for line in lines:
-                p = _new_p(line)
+                p = _new_p(line, left_id)
                 anchor_el.addnext(p)
                 anchor_el = p
             self._mark_sections_dirty()
         # 제목 볼드 — 기존 런 서식 기계 재사용 (문서 전체에서 title 원문 매칭)
         self.apply_run_format(title, bold=True)
-        return len(lines) + 1
+        return len(lines) + 2
 
     def _note_style_refs(self, kind: str) -> dict | None:
         """header 스타일에서 각주/미주 스타일 참조 조회 (이름 매칭).

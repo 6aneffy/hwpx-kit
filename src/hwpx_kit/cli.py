@@ -325,6 +325,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pta.add_argument("--pages", default="auto", choices=["auto", "com", "none"],
                      help="쪽번호: auto=한글 있으면 실측(기본) / com=필수 / none=제목만")
     pta.add_argument("--width", type=int, default=64, help="줄 표시 폭(반각 단위, 기본 64) — 점선 길이 계산용")
+    pta.add_argument("--own-page", action="store_true",
+                     help="목차를 새 쪽에서 시작 (제목에 쪽나눔) — 표지 뒤 삽입 시 권장")
     pta.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     pta.add_argument("--json", action="store_true")
 
@@ -532,7 +534,7 @@ def main(argv: list[str] | None = None) -> int:
 
             data = run_toc_add(args.file, at_text=args.at_text, out_path=args.out,
                                title=args.title, pages=args.pages,
-                               width=args.width)
+                               width=args.width, own_page=args.own_page)
         elif args.command == "open-check":
             from hwpx_kit.commands.open_check import run_open_check
 

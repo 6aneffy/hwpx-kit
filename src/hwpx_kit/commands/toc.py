@@ -60,7 +60,7 @@ def _lookup_pages_com(path: str, searches: list[str]) -> dict[str, int | None]:
 
 def run_toc_add(path: str, *, at_text: str, out_path: str,
                 title: str = "목 차", pages: str = "auto",
-                width: int = 64) -> dict:
+                width: int = 64, own_page: bool = False) -> dict:
     if pages not in ("auto", "com", "none"):
         raise ValueError(f"--pages는 auto/com/none 중 하나: {pages}")
 
@@ -82,7 +82,7 @@ def run_toc_add(path: str, *, at_text: str, out_path: str,
 
     lines = [format_toc_line(e["display"], page_map.get(e["search"]), width=width)
              for e in entries]
-    ad.insert_toc(at_text, lines, title=title)
+    ad.insert_toc(at_text, lines, title=title, own_page=own_page)
     saved = ad.save_copy(out_path)
 
     resolved = sum(1 for v in page_map.values() if v is not None)
