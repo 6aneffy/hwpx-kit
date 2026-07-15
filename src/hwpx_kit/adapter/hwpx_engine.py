@@ -1371,8 +1371,10 @@ class HwpxEngineAdapter:
 
         항목 정렬은 왼쪽 강제 — 앵커 paraPr를 물려받으면 표지(가운데 정렬)
         뒤에 넣을 때 계단 모양이 된다 (실캡처 실증 2026-07-15). 글자모양은
-        앵커에서 승계. own_page면 제목에 쪽나눔 — 목차가 새 쪽에서 시작.
-        삽입 문단 수 반환.
+        바탕글 스타일(본문 서식) — 앵커(표지 제목)의 크고 굵은 글자를
+        물려받으면 목차 같지 않다 (실캡처). own_page면 제목에 쪽나눔 +
+        **목차 뒤 원래 내용에도 쪽나눔** — 표지 잔여물이 목차 쪽으로 흘러드는
+        것 방지. 삽입 문단 수 반환.
         """
         with quiet_engine():
             target = self._find_anchor_paragraph(anchor_text=at_text)
@@ -1381,11 +1383,18 @@ class HwpxEngineAdapter:
             center_id = str(header.ensure_paragraph_alignment("CENTER"))
             left_id = str(header.ensure_paragraph_alignment("LEFT"))
 
-            char_ref = "0"
-            for el in base.iter():
-                if el.tag.endswith("}run") and el.get("charPrIDRef"):
-                    char_ref = el.get("charPrIDRef")
+            # 바탕글(스타일 id 0) 글자모양 — 없으면 앵커 승계 폴백
+            char_ref = None
+            for st in self.header_element().iter():
+                if st.tag.endswith("}style") and st.get("id") == "0":
+                    char_ref = st.get("charPrIDRef")
                     break
+            if not char_ref:
+                char_ref = "0"
+                for el in base.iter():
+                    if el.tag.endswith("}run") and el.get("charPrIDRef"):
+                        char_ref = el.get("charPrIDRef")
+                        break
 
             def _new_p(text: str, para_pr: str, page_break: bool = False):
                 p = base.makeelement(self._HP_NS + "p", {
@@ -1403,6 +1412,21 @@ class HwpxEngineAdapter:
                 p.append(run)
                 return p
 
+            # own_page: 목차 뒤 원래 내용도 새 쪽에서 — 표지 잔여물 유입 방지.
+            # 앵커 다음의 "내용 있는" 첫 문단에 건다 (표지의 빈 여백 문단들은
+            # 건너뜀 — 실측: 표지 앵커와 다음 내용 사이 빈 문단 다수).
+            # 기존 문단은 raw 속성이 저장 시 증발하므로 모델 경유 (page-break와 동일)
+            follower_el = base.getnext()
+            while follower_el is not None:
+                if follower_el.tag.endswith("}p"):
+                    has_content = any(
+                        (el.text or "").strip() for el in follower_el.iter()
+                        if el.tag.endswith("}t")
+                    ) or any(el.tag.endswith("}tbl") for el in follower_el.iter())
+                    if has_content:
+                        break
+                follower_el = follower_el.getnext()
+
             anchor_el = base
             title_p = _new_p(title, center_id, page_break=own_page)
             anchor_el.addnext(title_p)
@@ -1414,6 +1438,16 @@ class HwpxEngineAdapter:
                 p = _new_p(line, left_id)
                 anchor_el.addnext(p)
                 anchor_el = p
+
+            if own_page and follower_el is not None:
+                tree = follower_el.getroottree()
+                target_path = tree.getpath(follower_el)
+                for para in self._doc.paragraphs:
+                    if para.element.getroottree().getpath(para.element) == target_path:
+                        model = para.to_model()
+                        model.page_break = True
+                        para.apply_model(model)
+                        break
             self._mark_sections_dirty()
         # 제목 볼드 — 기존 런 서식 기계 재사용 (문서 전체에서 title 원문 매칭)
         self.apply_run_format(title, bold=True)
