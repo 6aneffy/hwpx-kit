@@ -94,3 +94,34 @@ def test_toc_add_com_pages_and_opens(tmp_path):
     xml = _section_xml(out)
     assert "···" in xml  # 쪽번호가 채워졌으면 점선 존재
     assert run_open_check(out)["opens"] is True
+
+
+def test_toc_entries_left_aligned_not_inheriting_anchor(tmp_path):
+    """항목은 왼쪽 정렬 강제 — 앵커가 가운데 정렬(표지)이면 계단이 됨 (실캡처)."""
+    out = str(tmp_path / "toc-left.hwpx")
+    run_toc_add(TEMPLATE, at_text=_anchor_text(), out_path=out,
+                title="목 차", pages="none", width=64)
+    ad = HwpxEngineAdapter.open(out)
+    header = ad.header_element()
+    import re
+    xml = _section_xml(out)
+    # 항목 문단의 paraPrIDRef가 LEFT 정렬 paraPr을 가리켜야 한다
+    entry_p = re.search(r'<hp:p ([^>]*)>(?:(?!</hp:p>).)*추진배경 및 목적', xml)
+    assert entry_p is not None
+    para_ref = re.search(r'paraPrIDRef="(\d+)"', entry_p.group(1)).group(1)
+    para_pr = re.search(
+        rf'<hh:paraPr id="{para_ref}"[^>]*>.*?</hh:paraPr>',
+        zipfile.ZipFile(out).read("Contents/header.xml").decode("utf-8"), re.S)
+    assert para_pr is not None
+    assert 'horizontal="LEFT"' in para_pr.group(0)
+
+
+def test_toc_add_own_page_sets_page_break(tmp_path):
+    out = str(tmp_path / "toc-ownpage.hwpx")
+    run_toc_add(TEMPLATE, at_text=_anchor_text(), out_path=out,
+                title="목 차", pages="none", width=64, own_page=True)
+    import re
+    xml = _section_xml(out)
+    title_p = re.search(r'<hp:p ([^>]*)>(?:(?!</hp:p>).)*목 차', xml)
+    assert title_p is not None
+    assert 'pageBreak="1"' in title_p.group(1)

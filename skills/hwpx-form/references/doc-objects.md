@@ -8,8 +8,12 @@
 
 ```bash
 hwpx-kit toc 문서.hwpx --json                                          # 후보 확인 (장 헤더 표·Ⅰ./제N장 문단)
-hwpx-kit toc-add 문서.hwpx --at-text "<목차 넣을 위치 문단>" --out 결과.hwpx
+hwpx-kit toc-add 문서.hwpx --at-text "<표지 마지막 문단>" --own-page --out 결과.hwpx
 ```
+- **`--own-page` 기본 사용** — 목차가 새 쪽에서 시작. 앵커는 표지 마지막
+  문단(outline으로 확인)으로 잡으면 "표지 → 목차 쪽 → 본문" 순서가 된다.
+  앵커를 잘못 잡으면 표지 한가운데 박힌다 (실캡처 실증)
+- 항목은 자동으로 왼쪽 정렬 + 점(·) 채움 + 쪽번호 끝 정렬, 제목은 가운데·볼드
 - **쪽번호는 한글 COM으로 실측** (Windows + 한글이면 `--pages auto` 기본값이
   알아서) — 한글이 백그라운드로 잠깐 뜬다고 사용자에게 미리 알릴 것.
   한글 없는 환경은 제목만 들어가고 warnings로 알려줌
