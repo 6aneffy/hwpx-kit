@@ -928,18 +928,33 @@ class HwpxEngineAdapter:
         """머리말/꼬리말 텍스트·쪽번호 설정. 적용 항목 이름 목록 반환."""
         applied: list[str] = []
         align_map = {"left": "LEFT", "center": "CENTER", "right": "RIGHT"}
+        page_align = None
+        if page_number is not None:
+            page_align = align_map.get(page_number.lower())
+            if page_align is None:
+                raise ValueError(f"쪽번호 위치는 left/center/right 중 하나: {page_number}")
         with quiet_engine():
             if header is not None:
                 self._doc.set_header_text(header)
                 applied.append("header")
-            if footer is not None:
+            if footer is not None and page_align is not None:
+                # 엔진 set_page_number는 footer를 통째 교체 → 텍스트 증발.
+                # 둘을 한 꼬리말 내용에 합친다 (텍스트 + 쪽번호 필드).
+                self._doc.set_footer_content([{
+                    "align": page_align,
+                    "children": [
+                        {"type": "run", "text": footer + "   "},
+                        {"type": "page_number", "page_number": "page",
+                         "position": "BOTTOM_CENTER"},
+                    ],
+                }])
+                applied.append("footer")
+                applied.append("page_number")
+            elif footer is not None:
                 self._doc.set_footer_text(footer)
                 applied.append("footer")
-            if page_number is not None:
-                align = align_map.get(page_number.lower())
-                if align is None:
-                    raise ValueError(f"쪽번호 위치는 left/center/right 중 하나: {page_number}")
-                self._doc.set_page_number(align=align)
+            elif page_align is not None:
+                self._doc.set_page_number(align=page_align)
                 applied.append("page_number")
         if not applied:
             raise ValueError("--header/--footer/--page-number 중 하나는 지정하세요.")

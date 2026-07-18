@@ -150,3 +150,17 @@ def test_cli_header_footer(doc_with_anchor, tmp_path, capsys):
     env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0 and env["ok"] is True
     assert set(env["data"]["applied"]) == {"footer", "page_number"}
+
+
+def test_footer_and_page_number_coexist(doc_with_anchor, tmp_path):
+    """꼬리말 텍스트 + 쪽번호를 동시 지정하면 둘 다 살아야 —
+    엔진 set_page_number가 footer를 통째 교체해 텍스트가 증발했다 (렌더 검증 실증)."""
+    import zipfile
+
+    out = str(tmp_path / "both.hwpx")
+    run_header_footer(doc_with_anchor, header=None, footer="대외비",
+                      page_number="center", out_path=out)
+    sec = zipfile.ZipFile(out).read("Contents/section0.xml").decode("utf-8")
+    assert "대외비" in sec, "꼬리말 텍스트 증발"
+    # 쪽번호 필드도 존재 (autoNum/pageNum 계열)
+    assert "PAGE" in sec.upper() or "autoNum" in sec, "쪽번호 필드 없음"
