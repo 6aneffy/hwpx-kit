@@ -1126,8 +1126,10 @@ class HwpxEngineAdapter:
                 table.merge_cells(r1, c1, r2, c2)
             if merges:
                 self._remove_ghost_cells(table.element)
-            if col_widths:
-                table.set_column_widths(col_widths)
+            # 표를 가용 페이지 폭으로 맞춘다 — add_table 기본 폭이 좁아
+            # 열이 좁으면 내용이 세로로 잘린다 (렌더 검증 실증 2026-07-15).
+            # col_widths 없으면 균등 분배로 전폭 사용.
+            self._fit_table_to_page_width(table, cols, col_widths)
             if header_color:
                 for c in range(cols):
                     if self._cell_is_anchor(table, 0, c):
@@ -1157,6 +1159,40 @@ class HwpxEngineAdapter:
 
         return {"rows": rows, "cols": cols, "merges": len(merges),
                 "cells": len(parsed_cells), "align": align}
+
+    def _usable_page_width(self) -> int | None:
+        """가용 본문 폭 = 용지폭 - 좌우여백 (hwpunit). 못 구하면 None."""
+        sec_el = self._doc._root._sections[0].element
+        page_pr = next((el for el in sec_el.iter()
+                        if el.tag.endswith("}pagePr")), None)
+        if page_pr is None:
+            return None
+        width = int(page_pr.get("width", "0") or 0)
+        if width <= 0:
+            return None
+        margin = next((ch for ch in page_pr if ch.tag.endswith("}margin")), None)
+        left = int(margin.get("left", "0") or 0) if margin is not None else 0
+        right = int(margin.get("right", "0") or 0) if margin is not None else 0
+        usable = width - left - right
+        return usable if usable > 0 else None
+
+    def _fit_table_to_page_width(self, table, cols: int,
+                                 col_widths: list | None) -> None:
+        """표 전체 폭을 가용 페이지 폭으로 설정하고 열을 비율 분배.
+
+        table.set_column_widths는 표 sz.width를 총폭으로 쓰므로 먼저 sz.width를
+        가용폭으로 바꾼 뒤 호출한다. col_widths 없으면 균등(전부 1).
+        가용폭을 못 구하면 col_widths만 적용(있을 때)해 종전 동작 유지.
+        """
+        usable = self._usable_page_width()
+        weights = col_widths if col_widths else [1] * cols
+        if usable is not None:
+            sz = table.element.find(
+                "{http://www.hancom.co.kr/hwpml/2011/paragraph}sz")
+            if sz is not None:
+                sz.set("width", str(usable))
+        if usable is not None or col_widths:
+            table.set_column_widths(weights)
 
     def align_cells(self, table_index: int, r1: int, c1: int, r2: int, c2: int,
                     align: str) -> int:

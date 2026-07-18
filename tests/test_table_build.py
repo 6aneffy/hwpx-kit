@@ -5,6 +5,7 @@
 정렬은 엔진 ensure_paragraph_alignment + paraPrIDRef 참조 + dirty (실험 검증 2026-07-12).
 """
 import json
+import zipfile
 
 import pytest
 
@@ -135,3 +136,43 @@ def test_cli_table_build(base_doc, tmp_path, capsys):
     env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0 and env["ok"] is True
     assert env["data"]["rows"] == 4
+
+
+def test_table_build_fills_usable_page_width(base_doc, tmp_path):
+    """생성 표는 가용 페이지 폭(용지폭-좌우여백)의 대부분을 채워야 한다 —
+    좁은 기본 폭에 갇히면 열이 좁아 내용이 잘린다 (렌더 검증 실증 2026-07-15)."""
+    import re
+
+    out = str(tmp_path / "wide.hwpx")
+    spec = {"rows": 4, "cols": 5, "col_widths": [2, 3, 3, 2, 2],
+            "cells": {"1,2": "클로드코드 스킬 개론"}}
+    sp = tmp_path / "spec.json"
+    sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    run_table_build(base_doc, spec_path=str(sp), at_text="일정표 자리", out_path=out)
+
+    sec = zipfile.ZipFile(out).read("Contents/section0.xml").decode("utf-8")
+    pp = re.search(r'<hp:pagePr[^>]*\bwidth="(\d+)"', sec)
+    mg = re.search(r'<hp:margin\b[^>]*\bleft="(\d+)"[^>]*\bright="(\d+)"', sec)
+    page_w = int(pp.group(1))
+    usable = page_w - int(mg.group(1)) - int(mg.group(2))
+
+    # 표1 행1의 셀 폭 합 (lxml로 정확히)
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+    ad = HwpxEngineAdapter.open(out)
+
+    def local(t):
+        return t.rsplit("}", 1)[-1]
+
+    tbls = [el for el in ad.section_elements()[0].iter() if el.tag.endswith("}tbl")]
+    our = next(t for t in tbls
+               if len([c for c in t if local(c.tag) == "tr"]) == 4)
+    rows = [c for c in our if local(c.tag) == "tr"]
+    row1 = rows[1]
+    total = 0
+    for tc in row1:
+        if local(tc.tag) != "tc":
+            continue
+        sz = next((c for c in tc if local(c.tag) == "cellSz"), None)
+        if sz is not None:
+            total += int(sz.get("width", "0"))
+    assert total >= usable * 0.9, f"표 폭 {total} < 가용폭 {usable}의 90%"
