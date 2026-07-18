@@ -196,6 +196,48 @@ class HwpxEngineAdapter:
                 count += 1
         return count
 
+    def replace_text_flexible_ws(self, search: str, value: str) -> int:
+        """공백 유연 매칭 교체 — search의 공백이 런 텍스트의 0개 공백과도 일치.
+
+        전각공백(fwSpace)은 렌더에선 공백으로 보이나 런 텍스트엔 문자로 안 남는다
+        (`<hp:t>보고서 제목<hp:fwSpace/>tail=(...)</hp:t>` 구조). 사용자는 보이는
+        대로 공백을 넣으므로 exact/across-runs가 실패한다. search의 연속 공백을
+        `\\s*` 정규식으로 바꿔 매칭하고, 매치된 <hp:t>를 값 텍스트로 통째 교체
+        (fwSpace 등 자식 제거 — run.text 세터는 멀티노드를 못 다뤄 조각이 남는다).
+        문단당 첫 출현 1회. 서식은 그 런을 따른다.
+        """
+        import re
+
+        if not search.strip():
+            return 0
+        pattern = re.compile(r"\s*".join(
+            re.escape(tok) for tok in search.split()))
+        count = 0
+        with quiet_engine():
+            for para in self._iter_all_paragraphs():
+                for run in list(para.runs):
+                    for t in [el for el in run.element
+                              if el.tag.endswith("}t")]:
+                        # <hp:t>의 전체 문자열 = text + 자식들의 tail
+                        full = (t.text or "") + "".join(
+                            (ch.tail or "") for ch in t)
+                        m = pattern.search(full)
+                        if not m:
+                            continue
+                        replaced = full[:m.start()] + value + full[m.end():]
+                        for ch in list(t):
+                            t.remove(ch)  # fwSpace 등 제거 (텍스트로 흡수됨)
+                        t.text = replaced
+                        count += 1
+                        break
+                    if count:
+                        break
+                if count:
+                    break
+            if count:
+                self._mark_sections_dirty()
+        return count
+
     @staticmethod
     def _display_width(s: str) -> int:
         """표시 폭 근사 — 전각(한글·한자) 2, 반각 1."""

@@ -92,3 +92,18 @@ def test_fit_rejects_value_wider_than_slot(tmp_path):
     assert len(result["unmatched"]) == 1
     reason = result["unmatched"][0]["reason"]
     assert "폭" in reason or "찾지 못함" in reason
+
+
+def test_text_fill_matches_across_fwspace(tmp_path):
+    """제목에 전각공백(fwSpace)이 껴 있으면 런 텍스트엔 공백이 없다 —
+    사용자는 렌더에서 공백으로 보고 공백을 넣으므로, 공백 유연 매칭이 필요.
+    (실양식 seoul-report-brief 제목이 이 패턴)"""
+    out = str(tmp_path / "fw.hwpx")
+    # 실제 텍스트는 '보고서 제목(HY헤드라인M+굵게28)'(공백0) — 사용자는 공백 넣음
+    result = run_fill(FIXTURE,
+                      {"text:보고서 제목 (HY헤드라인M+굵게28)": "새 제목입니다"},
+                      out)
+    assert result["unmatched"] == [], f"fwSpace 제목 매칭 실패: {result['unmatched']}"
+    ad = HwpxEngineAdapter.open(out)
+    assert any("새 제목입니다" in (p.text or "")
+               for p in ad._iter_all_paragraphs())
