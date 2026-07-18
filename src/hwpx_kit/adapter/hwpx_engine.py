@@ -1279,6 +1279,12 @@ class HwpxEngineAdapter:
                 paper_size=paper, orientation=hw_orient,
                 margins_mm=margins or None,
             )
+            if orientation is not None:
+                # 엔진 set_page_setup은 폭·높이를 명시로 줘야 스왑한다 —
+                # orientation만 주면 landscape 속성만 바뀌고 치수는 그대로라
+                # 한글이 세로로 렌더한다 (렌더 검증 실증 2026-07-15).
+                # 방향에 맞게 폭/높이 순서를 직접 강제한다.
+                self._enforce_orientation(orientation.lower())
             if columns is not None:
                 gap = int((column_gap_mm or 8.0) * self._HWPUNIT_PER_MM)
                 self._set_section_columns(int(columns), gap)
@@ -1287,6 +1293,37 @@ class HwpxEngineAdapter:
                 if warns:
                     result["warnings"] = warns
         return result
+
+    def _enforce_orientation(self, orientation: str) -> None:
+        """pagePr 폭/높이를 방향에 맞게 강제 (가로=폭>높이, 세로=폭<높이).
+
+        landscape 속성만으로는 한글 렌더가 안 바뀐다 — 치수가 진짜 방향이다.
+        margin의 좌우·상하도 방향 전환 시 함께 스왑해야 여백이 안 뒤집힌다.
+        """
+        want_landscape = orientation == "landscape"
+        for sec in self.section_elements():
+            page_pr = next((el for el in sec.iter()
+                            if el.tag.endswith("}pagePr")), None)
+            if page_pr is None:
+                continue
+            w = int(page_pr.get("width", "0") or 0)
+            h = int(page_pr.get("height", "0") or 0)
+            is_landscape = w > h
+            if want_landscape != is_landscape and w and h:
+                page_pr.set("width", str(h))
+                page_pr.set("height", str(w))
+                margin = next((ch for ch in page_pr
+                               if ch.tag.endswith("}margin")), None)
+                if margin is not None:
+                    lft = margin.get("left"); rgt = margin.get("right")
+                    top = margin.get("top"); bot = margin.get("bottom")
+                    # 가로/세로 전환 시 좌우↔상하 여백 교환
+                    if lft is not None and top is not None:
+                        margin.set("left", top); margin.set("top", lft)
+                    if rgt is not None and bot is not None:
+                        margin.set("right", bot); margin.set("bottom", rgt)
+            page_pr.set("landscape", "WIDELY" if want_landscape else "NARROWLY")
+        self._mark_sections_dirty()
 
     def _column_overflow_warnings(self, count: int, gap: int) -> list[str]:
         """단 폭보다 넓은 표 개수 경고 — 표 문서에 다단을 걸면 겹침 (실캡처 실증)."""

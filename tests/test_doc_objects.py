@@ -81,12 +81,41 @@ def test_bookmark_add_roundtrip(tmp_path):
 from hwpx_kit.commands.doc_objects import run_page_setup
 
 
-def test_page_setup_landscape(tmp_path):
+def _pagepr_dims(path):
+    import re
+
+    m = re.search(r'<hp:pagePr[^>]*\bwidth="(\d+)"[^>]*\bheight="(\d+)"', _section_xml(path))
+    if m is None:
+        m2 = re.search(r'<hp:pagePr[^>]*\bheight="(\d+)"[^>]*\bwidth="(\d+)"', _section_xml(path))
+        return (int(m2.group(2)), int(m2.group(1)))
+    return (int(m.group(1)), int(m.group(2)))
+
+
+def test_page_setup_landscape_actually_widens_page(tmp_path):
+    """가로 전환은 실제로 폭>높이여야 한다 — landscape 속성만 있고 치수가
+    세로면 한글이 세로로 렌더한다 (렌더 검증으로 실증 2026-07-15).
+    paper 미지정(orientation만) 케이스가 핵심 버그였다."""
     out = str(tmp_path / "land.hwpx")
+    run_page_setup(FIXTURE, paper=None, orientation="landscape",
+                   margins=None, columns=None, column_gap_mm=None, out_path=out)
+    w, h = _pagepr_dims(out)
+    assert w > h, f"가로인데 폭({w})<=높이({h}) — 실제로는 세로"
+
+
+def test_page_setup_portrait_keeps_tall(tmp_path):
+    out = str(tmp_path / "port.hwpx")
+    run_page_setup(FIXTURE, paper=None, orientation="portrait",
+                   margins=None, columns=None, column_gap_mm=None, out_path=out)
+    w, h = _pagepr_dims(out)
+    assert w < h, f"세로인데 폭({w})>=높이({h})"
+
+
+def test_page_setup_landscape_with_paper(tmp_path):
+    out = str(tmp_path / "land2.hwpx")
     run_page_setup(FIXTURE, paper="A4", orientation="landscape",
                    margins=None, columns=None, column_gap_mm=None, out_path=out)
-    xml = _section_xml(out)
-    assert 'landscape="WIDELY"' in xml
+    w, h = _pagepr_dims(out)
+    assert w > h
 
 
 def test_page_setup_margins(tmp_path):
