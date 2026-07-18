@@ -1116,6 +1116,7 @@ class HwpxEngineAdapter:
         header_rows = int(spec.get("header_rows", 0))
         header_color = spec.get("header_color")
         align = spec.get("align")
+        font_pt = spec.get("font_pt")
 
         with quiet_engine():
             target = self._find_anchor_paragraph(anchor_text=anchor_text,
@@ -1156,9 +1157,76 @@ class HwpxEngineAdapter:
                                     run.bold = True
             if align:
                 self._align_cell_paragraphs(table, 0, 0, rows - 1, cols - 1, align)
+            # 셀 폰트 정규화 — font_pt 명시면 그 크기, 없으면 과대(>16pt)만
+            # 본문 크기로 축소. 문서 기본 charPr이 제목 크기(28pt 등)인 소스에서
+            # 셀 내용이 칸보다 커 잘리는 것 방지 (렌더 검증 실증 2026-07-15).
+            # 정상 문서(기본 ~10pt)는 트리거 안 돼 무회귀.
+            self._normalize_table_cell_fonts(table, font_pt)
 
         return {"rows": rows, "cols": cols, "merges": len(merges),
-                "cells": len(parsed_cells), "align": align}
+                "cells": len(parsed_cells), "align": align,
+                "font_pt": font_pt}
+
+    _HH_NS = "{http://www.hancom.co.kr/hwpml/2011/head}"
+    _OVERSIZE_PT = 16  # 이보다 큰 셀 폰트는 표에 부적합 → 축소
+    _DEFAULT_CELL_PT = 10
+
+    def _charpr_height(self, header, ref: str) -> int:
+        el = header.element.find(f".//{self._HH_NS}charPr[@id='{ref}']")
+        return int(el.get("height", "0") or 0) if el is not None else 0
+
+    def _sized_charpr_id(self, header, base_ref: str, pt: float,
+                         cache: dict) -> str:
+        """base_ref 글자모양을 pt 크기로 만든 charPr id (없으면 복제 생성)."""
+        target = str(int(pt * 100))
+        key = (base_ref, target)
+        if key in cache:
+            return cache[key]
+        new = header.ensure_char_property(
+            base_char_pr_id=base_ref,
+            predicate=lambda cp: (cp.get("height") == target
+                                  and cp.get("_szbase") == base_ref),
+            modifier=lambda cp: (cp.set("height", target),
+                                 cp.set("_szbase", base_ref)),
+        )
+        new_id = new.get("id")
+        cache[key] = new_id
+        return new_id
+
+    def _normalize_table_cell_fonts(self, table, font_pt: float | None) -> None:
+        """표 셀 텍스트 run의 폰트 크기 정규화.
+
+        font_pt 지정 시 모든 셀 텍스트를 그 크기로. 미지정 시 16pt 초과 셀만
+        10pt로 축소(정상 문서는 트리거 안 됨 = 무회귀). 각 run은 원래
+        글자모양(폰트·색)을 유지한 채 height만 바뀐 charPr을 참조한다.
+        """
+        header = self._doc._root._headers[0]
+        cache: dict = {}
+        for tc in table.element.iter():
+            if not tc.tag.endswith("}tc"):
+                continue
+            for run in tc.iter():
+                if not run.tag.endswith("}run"):
+                    continue
+                ref = run.get("charPrIDRef")
+                if not ref:
+                    continue
+                has_text = any(el.tag.endswith("}t") and (el.text or "").strip()
+                               for el in run)
+                if not has_text:
+                    continue
+                cur = self._charpr_height(header, ref)
+                if font_pt is not None:
+                    target_pt = float(font_pt)
+                elif cur > self._OVERSIZE_PT * 100:
+                    target_pt = self._DEFAULT_CELL_PT
+                else:
+                    continue
+                if cur == int(target_pt * 100):
+                    continue
+                run.set("charPrIDRef",
+                        self._sized_charpr_id(header, ref, target_pt, cache))
+        self._mark_sections_dirty()
 
     def _usable_page_width(self) -> int | None:
         """가용 본문 폭 = 용지폭 - 좌우여백 (hwpunit). 못 구하면 None."""

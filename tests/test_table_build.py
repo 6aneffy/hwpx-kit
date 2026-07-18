@@ -27,6 +27,31 @@ def base_doc(tmp_path):
     return path
 
 
+@pytest.fixture()
+def base_doc_bigfont(tmp_path):
+    """기본 charPr(id 0) height를 28pt로 키운 문서 — 큰 기본 글자 소스 재현."""
+    import zipfile, shutil, re as _re
+    from hwpx.document import HwpxDocument
+    from hwpx_kit.output import quiet_engine
+    with quiet_engine():
+        doc = HwpxDocument.new()
+        doc.add_paragraph("표 자리")
+        p0 = str(tmp_path / "b0.hwpx")
+        doc.save_to_path(p0)
+    # header.xml에서 charPr id=0 height를 2800으로
+    p1 = str(tmp_path / "bigfont.hwpx")
+    zin = zipfile.ZipFile(p0)
+    with zipfile.ZipFile(p1, "w", zipfile.ZIP_DEFLATED) as zout:
+        for n in zin.namelist():
+            data = zin.read(n)
+            if n == "Contents/header.xml":
+                x = data.decode("utf-8")
+                x = _re.sub(r'(<hh:charPr id="0"[^>]*?height=")\d+(")', r"\g<1>2800\g<2>", x, count=1)
+                data = x.encode("utf-8")
+            zout.writestr(n, data)
+    return p1
+
+
 def _table(path, index=0):
     from hwpx.document import HwpxDocument
     from hwpx.tools import table_navigation as tn
@@ -176,3 +201,55 @@ def test_table_build_fills_usable_page_width(base_doc, tmp_path):
         if sz is not None:
             total += int(sz.get("width", "0"))
     assert total >= usable * 0.9, f"표 폭 {total} < 가용폭 {usable}의 90%"
+
+
+def _cell_font_heights(path):
+    """표(6행 등 큰 표) 본문 셀 run의 charPr height 목록."""
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    ad = HwpxEngineAdapter.open(path)
+    HH = "{http://www.hancom.co.kr/hwpml/2011/head}"
+    hdr = ad.header_element()
+
+    def h(ref):
+        el = hdr.find(f".//{HH}charPr[@id='{ref}']")
+        return int(el.get("height", "0")) if el is not None else 0
+
+    def local(t):
+        return t.rsplit("}", 1)[-1]
+
+    tbls = [el for el in ad.section_elements()[0].iter() if el.tag.endswith("}tbl")]
+    our = max(tbls, key=lambda t: len([c for c in t if local(c.tag) == "tr"]))
+    heights = []
+    for run in our.iter():
+        if local(run.tag) == "run" and run.get("charPrIDRef"):
+            t = next((c for c in run if local(c.tag) == "t" and (c.text or "").strip()), None)
+            if t is not None:
+                heights.append(h(run.get("charPrIDRef")))
+    return heights
+
+
+def test_table_build_shrinks_oversized_cell_font(base_doc_bigfont, tmp_path):
+    """문서 기본 글자가 큰(28pt) 소스에서도 표 셀은 본문 크기로 축소돼야 —
+    안 그러면 셀 내용이 칸보다 커 잘린다 (렌더 검증 실증 2026-07-15)."""
+    out = str(tmp_path / "shrunk.hwpx")
+    spec = {"rows": 3, "cols": 3,
+            "cells": {"1,0": "김철수", "1,1": "본관 301", "2,0": "이영희"}}
+    sp = tmp_path / "spec.json"
+    sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    run_table_build(base_doc_bigfont, spec_path=str(sp), at_text="표 자리", out_path=out)
+    heights = _cell_font_heights(out)
+    assert heights, "셀 텍스트 run이 있어야"
+    assert all(h <= 1600 for h in heights), f"16pt 초과 셀 폰트 잔존: {heights}"
+
+
+def test_table_build_font_pt_option(base_doc, tmp_path):
+    """spec.font_pt를 주면 모든 셀 텍스트가 그 크기."""
+    out = str(tmp_path / "fp.hwpx")
+    spec = {"rows": 2, "cols": 2, "font_pt": 11,
+            "cells": {"0,0": "가", "1,1": "나"}}
+    sp = tmp_path / "spec.json"
+    sp.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    run_table_build(base_doc, spec_path=str(sp), at_text="일정표 자리", out_path=out)
+    heights = _cell_font_heights(out)
+    assert heights and all(h == 1100 for h in heights), f"font_pt=11 미적용: {heights}"
