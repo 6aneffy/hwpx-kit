@@ -162,7 +162,7 @@ hwpx-kit fmt --date 20260101 --json          # 2026.1.1.(목)
 hwpx-kit convert 문서.hwp --json             # .hwp → .hwpx (Windows + 한글)
 hwpx-kit export 문서.hwpx --to docx --json   # 워드로 내보내기 (Windows + 한글)
 hwpx-kit generate 초안.md --out 새문서.hwpx   # Markdown → 공문서 (kordoc)
-hwpx-kit render 문서.hwpx --out p.svg        # SVG 미리보기 (kordoc)
+hwpx-kit render 문서.hwpx --engine com --out p.pdf   # 한글 실물 PDF 미리보기 (정확, Windows+한글) / kordoc SVG는 --engine kordoc
 ```
 
 ## fill_key 계약
