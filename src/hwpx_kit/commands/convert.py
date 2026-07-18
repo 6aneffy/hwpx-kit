@@ -15,8 +15,49 @@ from hwpx_kit.output import quiet_engine
 AUTO_ANSWER_MODE = 0x1 | 0x10 | 0x400 | 0x1000 | 0x10000 | 0x200000
 
 
+def _ensure_security_module() -> bool:
+    """한글 보안모듈(FilePathCheckerModule)을 레지스트리에 등록해 접근 경고
+    팝업을 억제한다.
+
+    외부 프로그램이 한글 COM으로 파일을 열면 한글이 "손상/유출 위험" 승인
+    팝업을 띄운다. pyhwpx가 자동 등록을 시도하나, register_regedit가
+    레지스트리 키를 OpenKey(KEY_WRITE)로 여는 탓에 **키가 처음부터 없는
+    환경(신규 PC 다수)에서는 실패**한다. 여기서는 CreateKeyEx로 키를 만들어
+    번들 DLL 경로를 확실히 등록한다 — 실사용자 팝업 방지의 핵심.
+    이미 등록됐으면 아무것도 안 함. 성공/이미등록이면 True.
+    """
+    try:
+        from pyhwpx.core import check_registry_key
+    except ImportError:
+        return False
+    if check_registry_key():
+        return True
+    try:
+        import os
+        from importlib.resources import files
+        from winreg import (
+            HKEY_CURRENT_USER, KEY_WRITE, REG_SZ, CloseKey, ConnectRegistry,
+            CreateKeyEx, SetValueEx,
+        )
+
+        dll = str(files("pyhwpx").joinpath("FilePathCheckerModule.dll"))
+        if not os.path.exists(dll):
+            return False
+        reg = ConnectRegistry(None, HKEY_CURRENT_USER)
+        # OpenKey와 달리 CreateKeyEx는 중간 키까지 없으면 생성한다
+        key = CreateKeyEx(reg, r"Software\HNC\HwpAutomation\Modules", 0, KEY_WRITE)
+        SetValueEx(key, "FilePathCheckerModule", 0, REG_SZ, dll)
+        CloseKey(key)
+        return check_registry_key()
+    except Exception:
+        return False
+
+
 def _load_hwp_com():
-    """pyhwpx.Hwp 클래스를 반환. 불가 환경이면 RuntimeError."""
+    """pyhwpx.Hwp 클래스를 반환. 불가 환경이면 RuntimeError.
+
+    반환 전에 보안모듈 등록을 보장해 COM 접근 경고 팝업을 억제한다.
+    """
     try:
         from pyhwpx import Hwp
     except ImportError as exc:
@@ -24,6 +65,7 @@ def _load_hwp_com():
             "hwp 변환에는 Windows + 한글(한컴오피스) + pyhwpx가 필요합니다. "
             "설치: pip install pyhwpx"
         ) from exc
+    _ensure_security_module()
     return Hwp
 
 

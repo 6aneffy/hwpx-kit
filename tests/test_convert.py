@@ -76,3 +76,23 @@ def test_convert_real_roundtrip(tmp_path, marker_doc):
     assert result["out"].endswith(".hwpx")
     content = run_read(result["out"], fmt="text")["content"]
     assert "출장 신청서" in content
+
+
+def test_ensure_security_module_creates_registry_key():
+    """보안모듈 미등록 환경에서 레지스트리 키를 생성해 팝업을 억제한다.
+    pyhwpx register_regedit는 키 부재 시 OpenKey로 실패 — 우리는 CreateKey로 견고.
+    (Windows 전용, pyhwpx 있을 때만)"""
+    import importlib.util
+    import pytest as _pytest
+
+    if importlib.util.find_spec("pyhwpx") is None:
+        _pytest.skip("pyhwpx 없는 환경")
+
+    from hwpx_kit.commands.convert import _ensure_security_module
+    from pyhwpx.core import check_registry_key
+
+    ok = _ensure_security_module()
+    assert ok is True
+    assert check_registry_key() is True
+    # 멱등 — 두 번째 호출도 안전
+    assert _ensure_security_module() is True
