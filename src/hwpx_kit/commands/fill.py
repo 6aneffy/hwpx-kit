@@ -52,6 +52,10 @@ def _apply_one(ad: HwpxEngineAdapter, fill_key: str, value: str) -> str | None:
             # 런 경계에 걸친 문구 — 매치 밖 서식은 보존
             count = ad.replace_text_across_runs(search, value)
         if count == 0:
+            # 전각공백(fwSpace) 등으로 런 텍스트에 공백이 없는 경우 —
+            # search의 공백을 유연 매칭 (보이는 공백 ≠ 실제 문자)
+            count = ad.replace_text_flexible_ws(search, value)
+        if count == 0:
             # 최후 폴백: 문단 전체 일치 (문단이 첫 런 서식으로 합쳐짐)
             count = ad.replace_paragraph_text(search, value)
         return None if count > 0 else "문서에서 해당 문구를 찾지 못함"
