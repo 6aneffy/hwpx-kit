@@ -13,7 +13,7 @@
 [![PyPI](https://img.shields.io/pypi/v/hwpx-kit-cli.svg)](https://pypi.org/project/hwpx-kit-cli/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757.svg)](https://claude.com/claude-code)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen.svg)](tests/)
 
 </div>
 
