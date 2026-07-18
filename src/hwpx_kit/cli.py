@@ -74,9 +74,11 @@ def _build_parser() -> argparse.ArgumentParser:
     px.add_argument("--out", help="출력 경로 (기본: 같은 이름에 형식 확장자)")
     px.add_argument("--json", action="store_true")
 
-    pn = sub.add_parser("render", help="레이아웃 보존 SVG 렌더 — 브라우저로 결과 확인 (kordoc 필요)")
+    pn = sub.add_parser("render", help="레이아웃 보존 미리보기 — com: 한글 실물 PDF(정확) / kordoc: SVG(근사)")
     pn.add_argument("file")
-    pn.add_argument("--out", help="출력 SVG 경로 (기본: 같은 이름 .svg)")
+    pn.add_argument("--out", help="출력 경로 (com→.pdf, kordoc→.svg, 기본: 같은 이름)")
+    pn.add_argument("--engine", default="auto", choices=["auto", "com", "kordoc"],
+                    help="auto=한글 있으면 com PDF(기본) / com=한글 실물 PDF / kordoc=SVG 근사")
     pn.add_argument("--json", action="store_true")
 
     pg = sub.add_parser("generate", help="Markdown → 공문서 HWPX 생성 (kordoc 필요)")
@@ -602,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
 
             data = run_image_del(args.file, index=args.index, out_path=args.out)
         elif args.command == "render":
-            data = run_render(args.file, out_path=args.out)
+            data = run_render(args.file, out_path=args.out, engine=args.engine)
         elif args.command == "generate":
             data = run_generate(args.file, args.out, preset=args.preset)
         else:
