@@ -103,3 +103,76 @@ def test_col_add_persists_after_write(table_doc, tmp_path):
     run_table_set(mid, table=0, assignments=[(0, 2, "새열"), (1, 2, "99")], out_path=out)
     _, _, cells = _grid(out)
     assert cells[(0, 2)] == "새열" and cells[(1, 2)] == "99"
+
+
+@pytest.fixture()
+def vmerge_doc(tmp_path):
+    """세로 병합(행0-1, 열0) 표 — MVP 거부 대상."""
+    from hwpx.document import HwpxDocument
+
+    from hwpx_kit.output import quiet_engine
+
+    with quiet_engine():
+        doc = HwpxDocument.new()
+        t = doc.add_table(2, 3)
+        t.merge_cells(0, 0, 1, 0)
+        path = str(tmp_path / "vm.hwpx")
+        doc.save_to_path(path)
+    return path
+
+
+@pytest.fixture()
+def hmerge_doc(tmp_path):
+    """가로 병합(행0, 열0-1) 표."""
+    from hwpx.document import HwpxDocument
+
+    from hwpx_kit.output import quiet_engine
+
+    with quiet_engine():
+        doc = HwpxDocument.new()
+        t = doc.add_table(2, 3)
+        t.merge_cells(0, 0, 0, 1)
+        t.set_cell_text(1, 0, "x"); t.set_cell_text(1, 2, "z")
+        path = str(tmp_path / "hm.hwpx")
+        doc.save_to_path(path)
+    return path
+
+
+def test_col_add_rejects_vertical_merge(vmerge_doc):
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    with pytest.raises(ValueError, match="세로 병합"):
+        HwpxEngineAdapter.open(vmerge_doc).add_table_columns(0, like=1, count=1)
+
+
+def test_col_add_rejects_merged_like(hmerge_doc):
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    with pytest.raises(ValueError, match="병합"):
+        HwpxEngineAdapter.open(hmerge_doc).add_table_columns(0, like=0, count=1)
+
+
+def test_col_del(table_doc, tmp_path):
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    out = str(tmp_path / "o.hwpx")
+    ad = HwpxEngineAdapter.open(table_doc)
+    deleted = ad.delete_table_columns(0, cols=[1])
+    ad.save_copy(out)
+    rows, cols, cells = _grid(out)
+    assert (rows, cols) == (2, 2) and deleted == 1
+    assert cells[(0, 0)] == "A" and cells[(0, 1)] == "C"  # B 삭제, C 당겨짐
+
+
+def test_col_del_rejects_all(table_doc):
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    with pytest.raises(ValueError, match="전부"):
+        HwpxEngineAdapter.open(table_doc).delete_table_columns(0, cols=[0, 1, 2])
+
+
+def test_col_del_rejects_vertical_merge(vmerge_doc):
+    from hwpx_kit.adapter.hwpx_engine import HwpxEngineAdapter
+
+    with pytest.raises(ValueError, match="세로 병합"):
+        HwpxEngineAdapter.open(vmerge_doc).delete_table_columns(0, cols=[1])
