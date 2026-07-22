@@ -40,5 +40,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/hwpx_kit"]
 
+# 🔴 sdist는 명시적 화이트리스트만 담는다 — private/·incoming/·mcp/ 등 기밀
+# 유출 방지. hatchling 기본 sdist는 .gitignore를 보는데 이 레포는 무시 규칙을
+# .git/info/exclude에 둬서(레포 위생) 빌드가 그걸 못 읽어 전체를 담았다
+# (0.9.0~0.13.0 PyPI에 private/ 유출 — 2026-07-22 사고). CLI 배포엔 패키지만
+# 필요하고 스킬/플러그인은 GitHub 마켓플레이스로 배포되므로 src만 담으면 충분.
+[tool.hatch.build.targets.sdist]
+only-include = ["src/hwpx_kit", "README.md", "LICENSE", "pyproject.toml"]
+exclude = ["mcp", "private", "incoming", "docs", "skills", ".claude-plugin", "dist", "tests"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
