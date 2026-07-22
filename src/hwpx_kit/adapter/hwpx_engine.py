@@ -778,6 +778,163 @@ class HwpxEngineAdapter:
             self._mark_sections_dirty()
         return len(targets)
 
+    @staticmethod
+    def _tc_col(tc) -> int:
+        for child in tc:
+            if child.tag.endswith("}cellAddr"):
+                return int(child.get("colAddr", "0"))
+        return 0
+
+    @staticmethod
+    def _col_spans(table_el) -> list[tuple[int, int]]:
+        """anchor 셀들의 가로 병합 구간 [(시작열, 끝열+1), ...] (colSpan>1만)."""
+        spans = []
+        for tc in table_el.iter():
+            if not tc.tag.endswith("}tc"):
+                continue
+            addr = span = None
+            for child in tc:
+                if child.tag.endswith("}cellAddr"):
+                    addr = int(child.get("colAddr", "0"))
+                elif child.tag.endswith("}cellSpan"):
+                    span = int(child.get("colSpan", "1"))
+            if addr is not None and span and span > 1:
+                spans.append((addr, addr + span))
+        return spans
+
+    @staticmethod
+    def _has_vertical_merge(table_el) -> bool:
+        for tc in table_el.iter():
+            if not tc.tag.endswith("}tc"):
+                continue
+            for child in tc:
+                if child.tag.endswith("}cellSpan") and int(child.get("rowSpan", "1")) > 1:
+                    return True
+        return False
+
+    def _table_cols(self, table_el) -> int:
+        n = table_el.get("colCnt")
+        if n is not None:
+            return int(n)
+        cols = [self._tc_col(tc) for tc in table_el.iter() if tc.tag.endswith("}tc")]
+        return (max(cols) + 1) if cols else 0
+
+    def add_table_columns(self, table_index: int, like: int, count: int = 1,
+                          at: int | None = None) -> int:
+        """like 열을 각 행에서 복제해 count개 삽입 (서식·폭 승계, 내용 비움).
+
+        새 열은 기준열 폭을 상속 → 표 폭 증가. 넘침은 col-width로 사후 조정.
+        가로 병합 가드: like가 병합 안이거나 삽입점이 병합을 가르면 거부.
+        MVP: 세로 병합 있는 표는 거부 (유령 tc 갭 안전 문제).
+        """
+        import copy as _copy
+
+        if count < 1:
+            raise ValueError(f"count는 1 이상: {count}")
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table_el = tables[table_index].table.element
+            if self._has_vertical_merge(table_el):
+                raise ValueError("세로 병합이 있는 표는 열 추가/삭제를 지원하지 않습니다 "
+                                 "— 병합 해제(cell-split) 후 시도하거나 한글에서 처리하세요.")
+            n_cols = self._table_cols(table_el)
+            if not 0 <= like < n_cols:
+                raise ValueError(f"기준 열 범위 밖: {like} (열 {n_cols}개)")
+            insert_at = like + 1 if at is None else at
+            if not 0 <= insert_at <= n_cols:
+                raise ValueError(f"삽입 위치 범위 밖: {insert_at} (열 {n_cols}개)")
+
+            for start, end in self._col_spans(table_el):
+                if start <= like < end:
+                    raise ValueError(
+                        f"기준 열 {like}에 가로 병합이 걸려 있음 — 병합 없는 열을 기준으로 지정하세요.")
+                if start < insert_at < end:
+                    raise ValueError(
+                        f"삽입 위치 {insert_at}가 가로 병합 구간({start}~{end - 1})을 가름 — 다른 위치를 지정하세요.")
+
+            for tr in self._table_trs(table_el):
+                tcs = [c for c in tr if c.tag.endswith("}tc")]
+                by_col = {self._tc_col(c): c for c in tcs}
+                like_tc = by_col.get(like)
+                if like_tc is None:
+                    raise ValueError(f"기준 열 {like}이(가) 일부 행에 없어 복제할 수 없습니다.")
+                left = by_col.get(insert_at - 1) if insert_at > 0 else None
+                # 뒤 열 주소 시프트
+                for c in tcs:
+                    col = self._tc_col(c)
+                    if col >= insert_at:
+                        for ch in c:
+                            if ch.tag.endswith("}cellAddr"):
+                                ch.set("colAddr", str(col + count))
+                anchor = left
+                for i in range(count):
+                    new_tc = _copy.deepcopy(like_tc)
+                    for node in new_tc.iter():
+                        if node.tag.endswith("}t"):
+                            node.text = ""
+                        elif node.tag.endswith("}cellAddr"):
+                            node.set("colAddr", str(insert_at + i))
+                        elif node.tag.endswith("}cellSpan"):
+                            node.set("colSpan", "1"); node.set("rowSpan", "1")
+                    if anchor is None:
+                        tr.insert(list(tr).index(tcs[0]), new_tc)
+                    else:
+                        anchor.addnext(new_tc)
+                    anchor = new_tc
+            table_el.set("colCnt", str(n_cols + count))
+            self._mark_sections_dirty()
+        return count
+
+    def delete_table_columns(self, table_index: int, cols: list[int]) -> int:
+        """지정 열들을 각 행에서 삭제. MVP: 세로 병합 표 거부.
+
+        가로 병합 부분 삭제 거부 (구간 전체를 함께 지정해야 허용).
+        내용만 비우려면 table-clear — 이 명령은 열 구조 자체를 줄인다.
+        """
+        with quiet_engine():
+            from hwpx.tools import table_navigation as tn
+
+            tables = tn._collect_document_tables(self._doc)
+            if not 0 <= table_index < len(tables):
+                raise ValueError(f"표 인덱스 범위 밖: {table_index} (표 {len(tables)}개)")
+            table_el = tables[table_index].table.element
+            if self._has_vertical_merge(table_el):
+                raise ValueError("세로 병합이 있는 표는 열 추가/삭제를 지원하지 않습니다 "
+                                 "— 병합 해제(cell-split) 후 시도하거나 한글에서 처리하세요.")
+            n_cols = self._table_cols(table_el)
+            targets = sorted(set(cols))
+            bad = [c for c in targets if not 0 <= c < n_cols]
+            if bad:
+                raise ValueError(f"열 범위 밖: {bad} (열 {n_cols}개)")
+            if len(targets) >= n_cols:
+                raise ValueError("열 전부를 삭제할 수 없습니다 — 표 삭제는 한글에서.")
+
+            target_set = set(targets)
+            for start, end in self._col_spans(table_el):
+                span_cols = set(range(start, end))
+                if span_cols & target_set and not span_cols <= target_set:
+                    raise ValueError(
+                        f"가로 병합 구간({start}~{end - 1})의 일부만 삭제할 수 없음 — 구간 전체를 함께 지정하세요.")
+
+            for tr in self._table_trs(table_el):
+                for c in [x for x in tr if x.tag.endswith("}tc")]:
+                    if self._tc_col(c) in target_set:
+                        tr.remove(c)
+                # 남은 tc colAddr 재인덱스 (colAddr 순 정렬 후 0..)
+                remaining = sorted((x for x in tr if x.tag.endswith("}tc")),
+                                   key=self._tc_col)
+                for new_idx, c in enumerate(remaining):
+                    for ch in c:
+                        if ch.tag.endswith("}cellAddr"):
+                            ch.set("colAddr", str(new_idx))
+            table_el.set("colCnt", str(n_cols - len(targets)))
+            self._mark_sections_dirty()
+        return len(targets)
+
     _HWPUNIT_PER_MM = 7200 / 25.4  # 1mm ≈ 283.46 hwpunit
 
     def insert_image(self, image_path: str, *, at_text: str | None = None,

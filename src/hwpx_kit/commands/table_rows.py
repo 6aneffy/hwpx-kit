@@ -25,3 +25,20 @@ def run_row_del(path: str, table: int, rows: list[int], out_path: str) -> dict:
     out = ad.save_copy(out_path)
     return {"file": path, "out": out, "table": table,
             "rows": sorted(set(rows)), "deleted": deleted}
+
+
+def run_col_add(path: str, table: int, like: int, count: int,
+                at: int | None, out_path: str) -> dict:
+    ad = HwpxEngineAdapter.open(path)
+    added = ad.add_table_columns(table, like=like, count=count, at=at)
+    out = ad.save_copy(out_path)
+    return {"file": path, "out": out, "table": table, "like": like,
+            "at": at if at is not None else like + 1, "added": added}
+
+
+def run_col_del(path: str, table: int, cols: list[int], out_path: str) -> dict:
+    ad = HwpxEngineAdapter.open(path)
+    deleted = ad.delete_table_columns(table, cols)
+    out = ad.save_copy(out_path)
+    return {"file": path, "out": out, "table": table,
+            "cols": sorted(set(cols)), "deleted": deleted}
