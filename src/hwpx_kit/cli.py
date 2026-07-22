@@ -204,6 +204,14 @@ def _build_parser() -> argparse.ArgumentParser:
     pcd.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     pcd.add_argument("--json", action="store_true")
 
+    pdf = sub.add_parser("diff", help="두 문서 비교 → 신구대조표(현행|개정) hwpx 또는 리포트")
+    pdf.add_argument("old", help="현행(기존) hwpx")
+    pdf.add_argument("new", help="개정(새) hwpx")
+    pdf.add_argument("--out", help="신구대조표 출력 hwpx (생략 시 리포트만)")
+    pdf.add_argument("--full", action="store_true", help="변경 없는 문단도 표에 포함")
+    pdf.add_argument("--title", default="신구대조표", help="표 앞 제목 문단 (기본 '신구대조표')")
+    pdf.add_argument("--json", action="store_true")
+
     pcl = sub.add_parser("table-clear", help="표의 지정 행 셀 내용 비우기 (구조는 유지 — 잔존 내용 정리용)")
     pcl.add_argument("file")
     pcl.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -376,8 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     as_json = args.json
 
-    # fmt는 파일 입력이 없다 — 파일 가드는 파일 위치인수가 있는 명령에만
-    if args.command != "fmt" and not os.path.exists(args.file):
+    # fmt는 파일 입력이 없고 diff는 old/new 두 개다 — 파일 가드는 file 위치인수가 있는 명령에만
+    if args.command not in ("fmt", "diff") and not os.path.exists(args.file):
         env = envelope(
             args.command, ok=False,
             error={"code": "FILE_NOT_FOUND", "message": f"파일이 없습니다: {args.file}"},
@@ -516,6 +524,13 @@ def main(argv: list[str] | None = None) -> int:
             data = run_col_del(
                 args.file, table=args.table,
                 cols=parse_rows_spec(args.cols), out_path=args.out,
+            )
+        elif args.command == "diff":
+            from hwpx_kit.commands.diff_doc import run_diff
+
+            data = run_diff(
+                args.old, args.new, out_path=args.out,
+                changes_only=not args.full, title=args.title,
             )
         elif args.command == "table-clear":
             data = run_table_clear(
