@@ -13,7 +13,7 @@
 [![PyPI](https://img.shields.io/pypi/v/hwpx-kit-cli.svg)](https://pypi.org/project/hwpx-kit-cli/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757.svg)](https://claude.com/claude-code)
-[![Tests](https://img.shields.io/badge/tests-276%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-312%20passing-brightgreen.svg)](tests/)
 
 </div>
 
@@ -192,7 +192,7 @@ hwpx-kit render 문서.hwpx --engine com --out p.pdf   # 한글 실물 PDF 미�
 ## 아키텍처
 
 ```
-Claude Code 스킬 6종 ──→  hwpx-kit CLI (42 명령, JSON 봉투)
+Claude Code 스킬 6종 ──→  hwpx-kit CLI (47 명령, JSON 봉투)
                               └─ adapter/  ← 엔진 격리 계층
                                   ├─ python-hwpx    hwpx 분석·채우기·표 조작
                                   ├─ pypdf·python-docx·openpyxl   타 포맷 읽기
