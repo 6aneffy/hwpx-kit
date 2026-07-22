@@ -188,6 +188,22 @@ def _build_parser() -> argparse.ArgumentParser:
     prd.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     prd.add_argument("--json", action="store_true")
 
+    pca = sub.add_parser("col-add", help="표 열 추가 — 기준 열 서식·폭 승계, 내용은 비움 (병합 표는 제약)")
+    pca.add_argument("file")
+    pca.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    pca.add_argument("--like", type=int, required=True, help="복제할 기준 열 (0-기준, 병합 없는 열)")
+    pca.add_argument("--count", type=int, default=1, help="추가할 열 수 (기본 1)")
+    pca.add_argument("--at", type=int, help="새 열 시작 위치 (0-기준, 생략 시 기준 열 바로 다음)")
+    pca.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pca.add_argument("--json", action="store_true")
+
+    pcd = sub.add_parser("col-del", help="표 열 삭제 — 가로 병합은 구간 전체를 함께 지정해야 허용")
+    pcd.add_argument("file")
+    pcd.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    pcd.add_argument("--cols", required=True, help="삭제할 열: '3-7' 범위 / '3,5' 나열 / 혼합")
+    pcd.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    pcd.add_argument("--json", action="store_true")
+
     pcl = sub.add_parser("table-clear", help="표의 지정 행 셀 내용 비우기 (구조는 유지 — 잔존 내용 정리용)")
     pcl.add_argument("file")
     pcl.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -486,6 +502,20 @@ def main(argv: list[str] | None = None) -> int:
             data = run_row_del(
                 args.file, table=args.table,
                 rows=parse_rows_spec(args.rows), out_path=args.out,
+            )
+        elif args.command == "col-add":
+            from hwpx_kit.commands.table_rows import run_col_add
+
+            data = run_col_add(
+                args.file, table=args.table, like=args.like,
+                count=args.count, at=args.at, out_path=args.out,
+            )
+        elif args.command == "col-del":
+            from hwpx_kit.commands.table_rows import run_col_del
+
+            data = run_col_del(
+                args.file, table=args.table,
+                cols=parse_rows_spec(args.cols), out_path=args.out,
             )
         elif args.command == "table-clear":
             data = run_table_clear(

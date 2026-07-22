@@ -176,3 +176,21 @@ def test_col_del_rejects_vertical_merge(vmerge_doc):
 
     with pytest.raises(ValueError, match="세로 병합"):
         HwpxEngineAdapter.open(vmerge_doc).delete_table_columns(0, cols=[1])
+
+
+def test_cli_col_add(table_doc, tmp_path, capsys):
+    out = str(tmp_path / "o.hwpx")
+    code = main(["col-add", table_doc, "--table", "0", "--like", "1",
+                 "--count", "1", "--out", out, "--json"])
+    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 0 and env["ok"] is True
+    assert _grid(out)[1] == 4
+
+
+def test_cli_col_del(table_doc, tmp_path, capsys):
+    out = str(tmp_path / "o.hwpx")
+    code = main(["col-del", table_doc, "--table", "0", "--cols", "1",
+                 "--out", out, "--json"])
+    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 0 and env["ok"] is True
+    assert _grid(out)[1] == 2
