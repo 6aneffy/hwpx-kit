@@ -43,3 +43,65 @@ def _body_paragraphs(path: str) -> list[str]:
             if t:
                 out.append(t)
     return out
+
+
+def run_diff(old_path: str, new_path: str, out_path: str | None = None,
+             changes_only: bool = True, header_color: str = "D9E2F3",
+             title: str = "신구대조표") -> dict:
+    """두 문서를 비교. out_path 있으면 신구대조표 hwpx 생성, 없으면 JSON
+    리포트만 반환. 비교는 본문 최상위 문단 단위(difflib)."""
+    old_paras = _body_paragraphs(old_path)
+    new_paras = _body_paragraphs(new_path)
+    blocks = diff_paragraphs(old_paras, new_paras)
+    summary = diff_summary(blocks)
+    src = [b for b in blocks if b["tag"] != "equal"] if changes_only else blocks
+
+    if not out_path:
+        return {"old": old_path, "new": new_path, "summary": summary,
+                "changes_only": changes_only,
+                "blocks": [{"tag": b["tag"], "old": b["old"], "new": b["new"]}
+                           for b in src]}
+
+    # 신구대조표 행: 헤더(현행|개정) + 변경(또는 전체) 블록
+    rows_data = [["현행", "개정"]]
+    for b in src:
+        left = "\n".join(b["old"])
+        right = "\n".join(b["new"])
+        rows_data.append([left, right])
+    if len(rows_data) == 1:  # 변경 없음
+        rows_data.append(["(변경 없음)", "(변경 없음)"])
+
+    n_rows = len(rows_data)
+    cells = {}
+    for r, row in enumerate(rows_data):
+        for c, val in enumerate(row):
+            cells[f"{r},{c}"] = val
+    spec = {"rows": n_rows, "cols": 2, "header_rows": 1,
+            "header_color": header_color, "cells": cells}
+
+    import os
+    import tempfile
+
+    from hwpx.document import HwpxDocument
+
+    # 빈 문서를 임시 경로에 만들고 → 어댑터로 열어 표 생성 → out_path 사본 저장.
+    # (어댑터 save_copy는 원본 경로 덮어쓰기를 막으므로 임시 경로를 원본으로 둔다.)
+    fd, tmp = tempfile.mkstemp(suffix=".hwpx")
+    os.close(fd)
+    try:
+        with quiet_engine():
+            doc = HwpxDocument.new()
+            paras = list(doc.paragraphs)
+            if paras:
+                paras[0].text = title
+            doc.save_to_path(tmp)
+        ad = HwpxEngineAdapter.open(tmp)
+        ad.build_table(spec, anchor_text=title)
+        out = ad.save_copy(out_path)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return {"old": old_path, "new": new_path, "out": out, "summary": summary,
+            "changes_only": changes_only, "rows": n_rows}
