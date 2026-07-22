@@ -222,6 +222,13 @@ def _build_parser() -> argparse.ArgumentParser:
     psm.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
     psm.add_argument("--json", action="store_true")
 
+    pmg = sub.add_parser("merge", help="두 문서 합본 — base 뒤에 add 이어붙임 (같은 서식 문서만, 경계 쪽나눔)")
+    pmg.add_argument("base", help="앞 문서 hwpx")
+    pmg.add_argument("add", help="뒤에 붙일 문서 hwpx")
+    pmg.add_argument("--out", required=True, help="합본 출력 hwpx (원본 불변)")
+    pmg.add_argument("--no-page-break", action="store_true", help="문서 경계 쪽나눔 생략")
+    pmg.add_argument("--json", action="store_true")
+
     pcl = sub.add_parser("table-clear", help="표의 지정 행 셀 내용 비우기 (구조는 유지 — 잔존 내용 정리용)")
     pcl.add_argument("file")
     pcl.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -394,8 +401,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     as_json = args.json
 
-    # fmt는 파일 입력이 없고 diff는 old/new 두 개다 — 파일 가드는 file 위치인수가 있는 명령에만
-    if args.command not in ("fmt", "diff") and not os.path.exists(args.file):
+    # fmt는 파일 입력 없음, diff/merge는 파일 위치인수가 둘 — 파일 가드는 file 위치인수가 있는 명령에만
+    if args.command not in ("fmt", "diff", "merge") and not os.path.exists(args.file):
         env = envelope(
             args.command, ok=False,
             error={"code": "FILE_NOT_FOUND", "message": f"파일이 없습니다: {args.file}"},
@@ -549,6 +556,13 @@ def main(argv: list[str] | None = None) -> int:
             data = run_table_sum(
                 args.file, table=args.table, cells=parse_cells_spec(args.cells),
                 into=(ir, ic), out_path=args.out, op=args.op, decimals=args.decimals,
+            )
+        elif args.command == "merge":
+            from hwpx_kit.commands.merge_doc import run_merge
+
+            data = run_merge(
+                args.base, args.add, out_path=args.out,
+                page_break=not args.no_page_break,
             )
         elif args.command == "table-clear":
             data = run_table_clear(
