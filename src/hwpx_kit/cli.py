@@ -212,6 +212,16 @@ def _build_parser() -> argparse.ArgumentParser:
     pdf.add_argument("--title", default="신구대조표", help="표 앞 제목 문단 (기본 '신구대조표')")
     pdf.add_argument("--json", action="store_true")
 
+    psm = sub.add_parser("table-sum", help="표 셀 수치 합계/평균 계산 → 대상 셀 기입 (결정론·사사오입·콤마)")
+    psm.add_argument("file")
+    psm.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
+    psm.add_argument("--cells", required=True, help="계산할 셀 'R,C;R,C;...'")
+    psm.add_argument("--into", required=True, help="결과 기입 셀 'R,C'")
+    psm.add_argument("--op", default="sum", choices=["sum", "avg"], help="sum(기본)/avg")
+    psm.add_argument("--decimals", type=int, default=0, help="결과 소수 자릿수 (기본 0)")
+    psm.add_argument("--out", required=True, help="출력 hwpx 경로 (원본 불변)")
+    psm.add_argument("--json", action="store_true")
+
     pcl = sub.add_parser("table-clear", help="표의 지정 행 셀 내용 비우기 (구조는 유지 — 잔존 내용 정리용)")
     pcl.add_argument("file")
     pcl.add_argument("--table", type=int, required=True, help="표 인덱스 (0-기준)")
@@ -531,6 +541,14 @@ def main(argv: list[str] | None = None) -> int:
             data = run_diff(
                 args.old, args.new, out_path=args.out,
                 changes_only=not args.full, title=args.title,
+            )
+        elif args.command == "table-sum":
+            from hwpx_kit.commands.table_calc import parse_cells_spec, run_table_sum
+
+            ir, ic = (int(x) for x in args.into.split(","))
+            data = run_table_sum(
+                args.file, table=args.table, cells=parse_cells_spec(args.cells),
+                into=(ir, ic), out_path=args.out, op=args.op, decimals=args.decimals,
             )
         elif args.command == "table-clear":
             data = run_table_clear(
