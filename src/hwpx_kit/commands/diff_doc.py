@@ -94,6 +94,10 @@ def run_diff(old_path: str, new_path: str, out_path: str | None = None,
             paras = list(doc.paragraphs)
             if paras:
                 paras[0].text = title
+                try:
+                    doc.set_paragraph_format(paragraph_index=0, alignment="center")
+                except Exception:
+                    pass  # 정렬 실패해도 표 생성은 진행 (제목은 배분정렬로 남음)
             doc.save_to_path(tmp)
         ad = HwpxEngineAdapter.open(tmp)
         ad.build_table(spec, anchor_text=title)
